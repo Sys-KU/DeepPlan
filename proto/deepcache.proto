@@ -1,0 +1,30 @@
+syntax = "proto2";
+
+enum DataType {
+	TYPE_FP32 = 1;
+	TYPE_INT32 = 2;
+	TYPE_INT64 = 3;
+}
+
+message ModelInput {
+	required DataType data_type = 1;
+	repeated uint32 shape = 2;
+	optional uint32 max_number = 3;
+}
+
+message Plan {
+	enum PlanType {
+		STATIC = 1;
+		DYNAMIC = 2;
+		BENCH_DYNAMIC = 3;
+	}
+
+	required PlanType plan_type = 1;
+	repeated uint32 load_layers = 2;
+}
+
+message ModelConfig {
+	required string model_name = 1;
+	repeated ModelInput inputs = 2;
+	repeated Plan plans = 3;
+}

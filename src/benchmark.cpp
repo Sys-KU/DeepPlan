@@ -1,0 +1,176 @@
+#include <iostream>
+#include <string>
+#include <unistd.h>
+#include <getopt.h>
+#include <torch/script.h>
+#include <c10/cuda/CUDAStream.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <cuda_runtime_api.h>
+
+#include <model.h>
+#include <util.h>
+
+struct BenchmarkOptions {
+  std::string model_name;
+  EngineType engine_type;
+  std::vector<int> devices;
+  int batch_size;
+  int num_warmup;
+  int num_test;
+};
+
+static struct option long_options[] =
+{
+  {"help",    no_argument,       0, 'h' },
+  {"model",   required_argument, 0, 'm' },
+  {"engine",  required_argument, 0, 'e' },
+  {"devices", required_argument, 0, 'd' },
+  {"batch",   required_argument, 0, 'b' },
+  {0,         0,                 0,  0  }
+};
+
+static void print_usage(char* program_name) {
+  fprintf(stderr,
+      "Usage : %s [-h] --model/-m MODEL_NAME [--device/-d DEVICES [DEVICES ...]]\n"
+      "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan}]\n"
+      "\t\t[--batch/-b BATCH_SIZE",
+      program_name);
+}
+
+void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
+  *benchmark_options = new BenchmarkOptions();
+  auto options = *benchmark_options;
+  char flag;
+
+  char engine_types[][20] = { "in_memory", "demand", "pipeline", "deepplan"};
+  int n_types = sizeof(engine_types) / 20;
+  bool found = false;
+
+  options->num_warmup  = 10;
+  options->num_test    = 100;
+  options->batch_size  = 1;
+  options->engine_type = EngineType::IN_MEMORY;
+  options->devices     = std::vector<int>(1, 0); // = [0]
+
+  while ((flag = getopt_long(argc, argv, "b:d:e:hm:", long_options, NULL)) != -1) { 
+    switch (flag) {
+      case 'h':
+        print_usage(argv[0]);
+        break;
+      case 'm':
+        options->model_name = std::string(optarg);
+        break;
+      case 'e':
+        found = false;
+        for (int i = 0; i < n_types; i++) {
+          if (!strcmp(engine_types[i], optarg)) {
+            options->engine_type = EngineType(i);
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          print_usage(argv[0]);
+          fprintf(stderr, "[Error] argument --engine/-e: invalid choice: %s (choose from",
+              optarg);
+          for (int i = 0; i < n_types; i++) {
+            fprintf(stderr, " \'%s\'", engine_types[i]);
+          }
+          fprintf(stderr, ")\n");
+          exit(EXIT_FAILURE);
+        }
+        break;
+      case 'b':
+        options->batch_size = (int)strtol(optarg, NULL, 10);
+        break;
+      case 'd':
+        optind--;
+        {
+          std::vector<int> devices;
+          for ( ; optind < argc && *argv[optind] != '-'; optind++) {
+            devices.push_back((int)strtol(argv[optind], NULL, 10));
+          }
+          options->devices = devices;
+        }
+        break;
+      default:
+        print_usage(argv[0]);
+        exit(EXIT_FAILURE);
+        break;
+        bool found = false;
+    }
+  }
+}
+
+void benchmark(BenchmarkOptions* options) {
+  double t1, t2, total_ms = 0;
+  int num_warmup = options->num_warmup;
+  int num_test   = options->num_test;
+
+  Model* model = new Model(
+                      options->model_name,
+                      options->engine_type,
+                      options->devices);
+  ScriptModuleInput inputs;
+
+  for (auto input_config : model->inputs) {
+    auto shape = input_config.shape;
+    shape.insert(shape.begin(), options->batch_size);
+
+    at::IntArrayRef sizes = torch::ArrayRef<int64_t>(shape.data(), shape.size());
+
+    auto options = torch::TensorOptions();
+    switch (input_config.data_type) {
+      case TYPE_FP32:
+        options = options.dtype(torch::kFloat32);
+        //input.push_back(torch::from_blob(data, shape, options).to(at::kCUDA));
+        inputs.push_back(torch::randn(sizes).to(at::kCUDA));
+        break;
+      case TYPE_INT64:
+        options = options.dtype(torch::kInt64);
+        //inputs.push_back(torch::from_blob(data, shape, options).to(at::kCUDA));
+        inputs.push_back(torch::randint(30522, sizes, options).to(at::kCUDA));
+        break;
+    }
+
+  }
+
+  if (options->engine_type == IN_MEMORY)
+    model->to(at::kCUDA);
+
+  for (int step = 0; step < num_warmup+num_test; step++) {
+    t1 = util::now();
+
+    if (options->engine_type == ON_DEMAND) {
+      model->to(at::kCUDA, true);
+      cudaDeviceSynchronize();
+    }
+
+    model->forward(inputs);
+
+    cudaDeviceSynchronize();
+    t2 = util::now();
+
+    if (options->engine_type != IN_MEMORY) {
+      model->clear();
+    }
+
+    if (step >= num_warmup) {
+      total_ms += ((t2-t1) / 1e6);
+    }
+  }
+
+  double avg_latency = total_ms / num_test;
+  std::cout << "Average Latency : " << avg_latency << " ms\n";
+}
+
+int main(int argc, char** argv)
+{
+  BenchmarkOptions* benchmark_options;
+  parseOptions(&benchmark_options, argc, argv);
+
+  std::cout << "Benchmarking Inference " << benchmark_options->model_name << "\n";
+
+  benchmark(benchmark_options);
+}
