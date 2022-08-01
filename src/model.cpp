@@ -2,6 +2,7 @@
 #include <engine.h>
 #include <util.h>
 #include <deepcache.pb.h>
+#include <c10/cuda/CUDAGuard.h>
 
 #include <torch/script.h>
 
@@ -23,10 +24,32 @@ static std::vector<ScriptModule> travel_layers(ScriptModule module, std::string 
   }
 }
 
+static std::vector<NamedModule> named_travel_layers(ScriptModule module, std::string name="") {
+  std::vector<NamedModule> traveled_layers;
+
+  if (module.children().size() == 0) {
+    traveled_layers.emplace_back(name, module);
+    return traveled_layers;
+  }
+  else {
+    for (auto name_child : module.named_children()) {
+      if (name_child.name.find("drop") != std::string::npos) continue;
+      if (name_child.name.find("relu") != std::string::npos) continue;
+      auto layers = named_travel_layers(name_child.value, name_child.name);
+      traveled_layers.insert(traveled_layers.end(), layers.begin(), layers.end());
+    }
+    return traveled_layers;
+  }
+}
+
 Model::Model(const std::string name, const EngineType type, const std::vector<int> devices)
   : model_name(name),
-    engine_type(type),
-    devices(devices) {init();}
+    engine_type(type) {
+      if (!devices.empty()) {
+        this->devices = devices;
+      }
+      init();
+    }
 
 void Model::init() {
   const char *model_repo = getenv("MODEL_REPO");
@@ -64,7 +87,11 @@ void Model::init() {
   this->layers = travel_layers(this->model);
   this->model.eval();
   this->model.to(at::kCPU);
-  this->model.cuda_host();
+  this->target_device = at::Device(at::kCUDA, devices[0]);
+  {
+    c10::cuda::CUDAGuard device_guard(this->target_device);
+    this->model.cuda_host();
+  }
 
   switch (engine_type) {
     case EngineType::IN_MEMORY:
@@ -100,7 +127,7 @@ void Model::init() {
   {
     int n_device = devices.size();
     size_t block_size = model_size / n_device;
-    auto split_iter = load_layer_idxs.begin();
+    auto iter = load_layer_idxs.begin();
 
     for (int i = 0; i < n_device; i++) {
       int device = devices[i];
@@ -108,11 +135,10 @@ void Model::init() {
       size_t layer_size = 0;
       std::vector<int> layer_list;
 
-      for (auto iter = split_iter; iter != load_layer_idxs.end(); iter++) {
+      for (iter; iter != load_layer_idxs.end(); iter++) {
         layer_size = util::getModuleSize(layers[*iter]);
         cumm_size += layer_size;
         if (cumm_size > block_size) {
-          split_iter = iter;
           break;
         }
 
@@ -121,7 +147,7 @@ void Model::init() {
 
       // Insert remain layers to last device
       if (i == n_device-1) {
-        for (auto iter = split_iter; iter != load_layer_idxs.end(); iter++) {
+        for (iter; iter != load_layer_idxs.end(); iter++) {
           layer_list.push_back(*iter);
         }
       }
@@ -134,7 +160,7 @@ void Model::init() {
   // If using parallel transfer, the devices other than the target device
   // convert cuda_host to pin_memory
 
-  this->model.cuda_backup();
+  model.cuda_backup();
   this->is_cuda = false;
 }
 

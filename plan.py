@@ -329,15 +329,20 @@ def generate_dynamic_plan(layers):
 def generate_trace_module(model, x):
     layers = util.travel_layers(model)
     def hook(self, input: Tuple[torch.Tensor]):
-        for parm in self.parameters():
-            torch.sync_tensor(parm, input[0].device)
-        for buff in self.buffers():
-            torch.sync_tensor(buff, input[0].device)
+        for name, param in self.named_parameters():
+            if name in ['weight']:
+                torch.sync_tensor_(param, input[0])
+
+#        for parm in self.parameters():
+#            torch.sync_tensor_(parm, input[0])
+#        for buff in self.buffers():
+#            torch.sync_tensor_(buff, input[0])
 
         return input
 
     for layer in layers:
-        layer.register_forward_pre_hook(hook)
+        if len(layer._forward_pre_hooks) == 0:
+            layer.register_forward_pre_hook(hook)
 
     trace_module = torch.jit.trace(model, x)
     return trace_module

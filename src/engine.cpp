@@ -29,8 +29,17 @@ class LoadThread {
   struct Task {
    public:
     Task(std::vector<ScriptModule> modules, int device)
-      : modules(modules),
+      : type(Type::request),
+        modules(modules),
         device(device) {};
+
+    Task()
+      : type(Type::end) {};
+
+    enum class Type {
+      request = 0,
+      end
+    } type;
 
     std::vector<ScriptModule> modules;
     int device;
@@ -47,7 +56,7 @@ class LoadThread {
 
   void stop() {
     is_finished = true;
-    queue.abort();
+    queue.push(std::make_shared<Task>()); // Insert EndofItem
     if (thr.joinable())
       thr.join();
   }
@@ -70,21 +79,23 @@ class NVLinkThread : public LoadThread {
   }
 
   void Loop() {
+    at::Device device(at::kCUDA, device_);
     at::cuda::CUDAStreamGuard guard(stream);
-    at::Device device("cuda:" + std::to_string(device_));
+    c10::cuda::CUDAGuard device_guard(device);
+
     std::shared_ptr<Task> task;
 
     while (!is_finished) {
-      try {
-        queue.pop(task);
-        at::Device target_device("cuda:" + std::to_string(task->device));
-
-        for (auto& module : task->modules) {
-          module.synchronize(device);
-          module.to_and_record(target_device, true);
-        }
+      queue.pop(task);
+      if (task->type == Task::Type::end) {
+        break;
       }
-      catch (...) {};
+      at::Device target_device(at::kCUDA, task->device);
+
+      for (auto& module : task->modules) {
+        module.synchronize(device);
+        module.to_and_record(target_device, true);
+      }
     }
   }
 
@@ -105,51 +116,51 @@ class PCIeThread : public LoadThread {
   }
 
   void Loop() {
+    at::Device device(at::kCUDA, device_);
     at::cuda::CUDAStreamGuard guard(stream);
-    at::Device device("cuda:" + std::to_string(device_));
+    c10::cuda::CUDAGuard device_guard(device);
+
     std::shared_ptr<Task> task;
 
     while (!is_finished) {
-      try {
-        queue.pop(task);
-        int target_device = task->device;
-        for (auto& module : task->modules) {
-          module.to_and_record(device, true);
+      queue.pop(task);
+      if (task->type == Task::Type::end) {
+        break;
+      }
 
-          if (target_device != device_) {
-            g_nvlink_thrs[device_]->transfer_modules(module, target_device);
-          }
+      int target_device = task->device;
+      std::vector<ScriptModule> modules_with_nvlink;
+
+      for (auto& module : task->modules) {
+        module.to_and_record(device, true);
+
+        if (target_device != device_) {
+          modules_with_nvlink.push_back(module);
         }
       }
-      catch (...) {};
+      g_nvlink_thrs[device_]->LoadThread::transfer_modules(modules_with_nvlink, target_device);
     }
   }
 };
 
-static void init(void) {
+void init(void) {
   n_device = torch::cuda::device_count();
 
+  g_pcie_thrs.resize(n_device);
+  g_nvlink_thrs.resize(n_device);
+
   for (int i = 0; i < n_device; i++) {
-    g_pcie_thrs.push_back(std::move(new PCIeThread(i)));
-    g_nvlink_thrs.push_back(std::move(new NVLinkThread(i)));
+    g_pcie_thrs[i] = new PCIeThread(i);
+    g_nvlink_thrs[i] = new NVLinkThread(i);
     g_exec_streams.push_back(std::move(c10::cuda::getStreamFromPool(false, i)));
   }
 }
 
-static void deinit(void) {
+void deinit(void) {
   for (int i = 0; i < n_device; i++) {
     g_pcie_thrs[i]->stop();
     g_nvlink_thrs[i]->stop();
   }
-}
-
-namespace {
-  struct Cleaner {
-    Cleaner() {init();}
-    ~Cleaner() {deinit();}
-  };
-
-  Cleaner cleaner;
 }
 
 class PipelineEngine : public Engine {
@@ -158,30 +169,35 @@ class PipelineEngine : public Engine {
     : Engine() {};
 
   void run(Model* model, ScriptModuleInput& x) {
-    int target_device = model->devices[0];
+    int target_device = model->target_device.index();
 
     assert(n_device > target_device);
 
-    at::cuda::CUDAStreamGuard guard(g_exec_streams[target_device]);
     if (!model->is_cuda) {
-      for (auto const& it : model->device_map) {
+
+      for (int device : model->devices) {
         std::vector<ScriptModule> modules;
-        for (auto idx : it.second) {
+        for (auto idx : model->device_map[device]) {
           modules.push_back(model->layers[idx]);
         }
-        g_pcie_thrs[it.first]->transfer_modules(modules, target_device);
+        g_pcie_thrs[device]->transfer_modules(modules, target_device);
       }
     }
-    model->model.forward(x);
+
+    {
+      at::cuda::CUDAStreamGuard stream_guard(g_exec_streams[target_device]);
+      auto out = model->model.forward(x);
+    }
     model->is_cuda = true;
     return;
   }
 };
 
-PipelineEngine engine;
+static PipelineEngine engine;
 
 void run(Model* model, ScriptModuleInput& x) {
   c10::InferenceMode guard;
+  c10::cuda::CUDAGuard device_guard(model->target_device);
   engine.run(model, x);
 }
 

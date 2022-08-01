@@ -13,7 +13,15 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 add_executable(benchmark ${SRC_LIST})
 target_link_libraries(benchmark
 	tbb
-	deepcache_proto
+	deepplan_proto
+	${Boost_LIBRARIES}
+	${TORCH_LIBRARIES}
+)
+
+add_executable(test model.cpp engine.cpp util.cpp test.cpp)
+target_link_libraries(test
+	tbb
+	deepplan_proto
 	${Boost_LIBRARIES}
 	${TORCH_LIBRARIES}
 )

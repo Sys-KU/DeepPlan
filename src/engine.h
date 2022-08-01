@@ -12,4 +12,8 @@ class Engine {
 
 void run(Model* model, ScriptModuleInput& x);
 
+void init(void);
+
+void deinit(void);
+
 }

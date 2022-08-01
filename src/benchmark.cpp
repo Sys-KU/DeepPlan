@@ -4,11 +4,13 @@
 #include <getopt.h>
 #include <torch/script.h>
 #include <c10/cuda/CUDAStream.h>
+#include <torch/cuda.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
 
 #include <model.h>
 #include <util.h>
+#include <engine.h>
 
 struct BenchmarkOptions {
   std::string model_name;
@@ -107,6 +109,7 @@ void benchmark(BenchmarkOptions* options) {
   double t1, t2, total_ms = 0;
   int num_warmup = options->num_warmup;
   int num_test   = options->num_test;
+  at::Device target_device(at::kCUDA, options->devices[0]);
 
   Model* model = new Model(
                       options->model_name,
@@ -125,31 +128,31 @@ void benchmark(BenchmarkOptions* options) {
       case TYPE_FP32:
         options = options.dtype(torch::kFloat32);
         //input.push_back(torch::from_blob(data, shape, options).to(at::kCUDA));
-        inputs.push_back(torch::randn(sizes).to(at::kCUDA));
+        inputs.push_back(torch::randn(sizes).to(target_device));
         break;
       case TYPE_INT64:
         options = options.dtype(torch::kInt64);
         //inputs.push_back(torch::from_blob(data, shape, options).to(at::kCUDA));
-        inputs.push_back(torch::randint(30522, sizes, options).to(at::kCUDA));
+        inputs.push_back(torch::randint(30522, sizes, options).to(target_device));
         break;
     }
 
   }
 
   if (options->engine_type == IN_MEMORY)
-    model->to(at::kCUDA);
+    model->to(target_device);
 
   for (int step = 0; step < num_warmup+num_test; step++) {
     t1 = util::now();
 
     if (options->engine_type == ON_DEMAND) {
-      model->to(at::kCUDA, true);
-      cudaDeviceSynchronize();
+      model->to(target_device, true);
+      torch::cuda::synchronize(target_device.index());
     }
 
     model->forward(inputs);
 
-    cudaDeviceSynchronize();
+    torch::cuda::synchronize(target_device.index());
     t2 = util::now();
 
     if (options->engine_type != IN_MEMORY) {
@@ -163,6 +166,8 @@ void benchmark(BenchmarkOptions* options) {
 
   double avg_latency = total_ms / num_test;
   std::cout << "Average Latency : " << avg_latency << " ms\n";
+
+  return;
 }
 
 int main(int argc, char** argv)
@@ -172,5 +177,11 @@ int main(int argc, char** argv)
 
   std::cout << "Benchmarking Inference " << benchmark_options->model_name << "\n";
 
+  engine::init();
+
   benchmark(benchmark_options);
+
+  engine::deinit();
+
+  return 0;
 }

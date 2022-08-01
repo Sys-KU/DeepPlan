@@ -2,7 +2,7 @@
 
 #include <torch/script.h>
 #include <util.h>
-#include <map>
+#include <unordered_map>
 #include <deepcache.pb.h>
 
 struct InputConfig {
@@ -13,6 +13,16 @@ struct InputConfig {
 
   std::vector<int64_t> shape;
   DataType data_type;
+};
+
+struct NamedModule {
+ public:
+  NamedModule(std::string name, ScriptModule module)
+    : name(name),
+      value(module) {};
+
+  std::string name;
+  ScriptModule value;
 };
 
 struct Model {
@@ -33,7 +43,9 @@ struct Model {
 
   EngineType engine_type;
 
-  std::vector<int> devices;
+  std::vector<int> devices{0};
+
+  at::Device target_device = at::kCUDA;
 
   ScriptModule model;
 
@@ -43,7 +55,7 @@ struct Model {
 
   std::vector<ScriptModule> layers;
 
-  std::map<int, std::vector<int>> device_map;
+  std::unordered_map<int, std::vector<int>> device_map;
 
   int n_layers;
 
