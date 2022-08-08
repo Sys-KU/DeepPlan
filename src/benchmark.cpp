@@ -8,9 +8,9 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
 
-#include <model.h>
+#include <core/model.h>
+#include <core/engine.h>
 #include <util.h>
-#include <engine.h>
 
 struct BenchmarkOptions {
   std::string model_name;
@@ -170,8 +170,7 @@ void benchmark(BenchmarkOptions* options) {
   return;
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   BenchmarkOptions* benchmark_options;
   parseOptions(&benchmark_options, argc, argv);
 

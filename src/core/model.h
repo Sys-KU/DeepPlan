@@ -3,7 +3,7 @@
 #include <torch/script.h>
 #include <util.h>
 #include <unordered_map>
-#include <deepcache.pb.h>
+#include <deepplan.pb.h>
 
 struct InputConfig {
  public:

@@ -1,5 +1,5 @@
-#include <model.h>
-#include <engine.h>
+#include <core/model.h>
+#include <core/engine.h>
 #include <util.h>
 
 #include <cassert>
@@ -129,16 +129,14 @@ class PCIeThread : public LoadThread {
       }
 
       int target_device = task->device;
-      std::vector<ScriptModule> modules_with_nvlink;
 
       for (auto& module : task->modules) {
         module.to_and_record(device, true);
 
         if (target_device != device_) {
-          modules_with_nvlink.push_back(module);
+          g_nvlink_thrs[device_]->transfer_modules(module, target_device);
         }
       }
-      g_nvlink_thrs[device_]->LoadThread::transfer_modules(modules_with_nvlink, target_device);
     }
   }
 };

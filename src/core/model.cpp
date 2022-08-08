@@ -1,7 +1,7 @@
-#include <model.h>
-#include <engine.h>
+#include <core/model.h>
+#include <core/engine.h>
 #include <util.h>
-#include <deepcache.pb.h>
+#include <deepplan.pb.h>
 #include <c10/cuda/CUDAGuard.h>
 
 #include <torch/script.h>
