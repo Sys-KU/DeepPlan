@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <thread>
+#include <future>
 
 #include "deepcache.pb.h"
 #include "tbb/concurrent_queue.h"
@@ -55,7 +56,9 @@ class ClientSession : public Session {
  public:
   ClientSession(boost::asio::io_service& io_service);
 
-  void send_request(serverapi::Request& request, std::function<void(void)> onSuccess);
+  std::future<serverapi::Response*> send_request_async(serverapi::Request& request, std::function<void(serverapi::Response*)> onSuccess);
+
+  serverapi::Response* send_request(serverapi::Request& request, std::function<void(serverapi::Response*)> onSuccess);
 
   void await_completion();
 
@@ -69,7 +72,7 @@ class ClientSession : public Session {
  private:
   std::atomic_int request_seed_id;
   std::atomic_int received_rsp_cnt;
-  std::map<uint64_t, std::function<void(void)>> requests;
+  std::map<uint64_t, std::function<void(serverapi::Response*)>> requests;
 };
 
 }

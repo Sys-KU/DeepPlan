@@ -2,19 +2,19 @@
 
 namespace serverapi {
 
-class Request {
+struct Request {
  public:
   virtual ~Request() {};
   uint64_t req_id;
 };
 
-class Response {
+struct Response {
  public:
   virtual ~Response() {};
   uint64_t req_id;
 };
 
-class InferenceRequest : public Request {
+struct InferenceRequest : public Request {
  public:
   uint32_t model_id;
   uint32_t batch_size;
@@ -22,17 +22,31 @@ class InferenceRequest : public Request {
   void* input;
 };
 
-class InferenceResponse : public Response {
+struct InferenceResponse : public Response {
+ public:
+  bool is_cold;
+  int32_t dummy;
+};
+
+struct UploadModelRequest : public Request {
+ public:
+  std::string model_name;
+  uint32_t n_models;
+  uint32_t engine_type;
+  uint32_t mp_size;
+};
+
+struct UploadModelResponse : public Response {
  public:
   int32_t dummy;
 };
 
-class CloseRequest : public Request {
+struct CloseRequest : public Request {
  public:
   int32_t dummy;
 };
 
-class CloseResponse : public Response {
+struct CloseResponse : public Response {
  public:
   int32_t dummy;
 };

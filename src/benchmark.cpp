@@ -8,8 +8,8 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
 
-#include <core/model.h>
-#include <core/engine.h>
+#include <deepplan/model.h>
+#include <deepplan/engine.h>
 #include <util.h>
 
 struct BenchmarkOptions {
@@ -109,34 +109,21 @@ void benchmark(BenchmarkOptions* options) {
   double t1, t2, total_ms = 0;
   int num_warmup = options->num_warmup;
   int num_test   = options->num_test;
+  int batch_size  = options->batch_size;
   at::Device target_device(at::kCUDA, options->devices[0]);
 
-  Model* model = new Model(
-                      options->model_name,
-                      options->engine_type,
-                      options->devices);
+  deepplan::Model* model = new deepplan::Model(
+                                            options->model_name,
+                                            options->engine_type,
+                                            options->devices);
+
+  util::InputGenerator input_generator;
+
   ScriptModuleInput inputs;
+  input_generator.generate_input(options->model_name, batch_size, &inputs);
 
-  for (auto input_config : model->inputs) {
-    auto shape = input_config.shape;
-    shape.insert(shape.begin(), options->batch_size);
-
-    at::IntArrayRef sizes = torch::ArrayRef<int64_t>(shape.data(), shape.size());
-
-    auto options = torch::TensorOptions();
-    switch (input_config.data_type) {
-      case TYPE_FP32:
-        options = options.dtype(torch::kFloat32);
-        //input.push_back(torch::from_blob(data, shape, options).to(at::kCUDA));
-        inputs.push_back(torch::randn(sizes).to(target_device));
-        break;
-      case TYPE_INT64:
-        options = options.dtype(torch::kInt64);
-        //inputs.push_back(torch::from_blob(data, shape, options).to(at::kCUDA));
-        inputs.push_back(torch::randint(30522, sizes, options).to(target_device));
-        break;
-    }
-
+  for (auto& input : inputs) {
+    input = input.toTensor().to(model->target_device);
   }
 
   if (options->engine_type == IN_MEMORY)
@@ -176,11 +163,11 @@ int main(int argc, char** argv) {
 
   std::cout << "Benchmarking Inference " << benchmark_options->model_name << "\n";
 
-  engine::init();
+  deepplan::Init();
 
   benchmark(benchmark_options);
 
-  engine::deinit();
+  deepplan::Deinit();
 
   return 0;
 }

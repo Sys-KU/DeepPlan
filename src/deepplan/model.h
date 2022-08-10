@@ -5,27 +5,9 @@
 #include <unordered_map>
 #include <deepplan.pb.h>
 
-struct InputConfig {
- public:
-  InputConfig(ModelInput io)
-  : shape(io.shape().begin(), io.shape().end()),
-    data_type(io.data_type()) {}
+namespace deepplan {
 
-  std::vector<int64_t> shape;
-  DataType data_type;
-};
-
-struct NamedModule {
- public:
-  NamedModule(std::string name, ScriptModule module)
-    : name(name),
-      value(module) {};
-
-  std::string name;
-  ScriptModule value;
-};
-
-struct Model {
+class Model {
  public:
   Model(const std::string name, const EngineType type, const std::vector<int> devices);
 
@@ -43,15 +25,13 @@ struct Model {
 
   EngineType engine_type;
 
-  std::vector<int> devices{0};
+  std::vector<int> devices = {0};
 
   at::Device target_device = at::kCUDA;
 
   ScriptModule model;
 
   size_t model_size;
-
-  std::vector<InputConfig> inputs;
 
   std::vector<ScriptModule> layers;
 
@@ -64,5 +44,8 @@ struct Model {
   std::atomic<bool> is_cuda;
 
   ModelConfig model_config;
+
+  std::vector<InputConfig> input_configs;
 };
 
+}

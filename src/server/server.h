@@ -2,10 +2,11 @@
 
 #include <network/session.h>
 #include <network/message.h>
-#include <controller.h>
+#include <server/controller.h>
 
 #include <server_api.h>
 #include <boost/asio.hpp>
+#include <atomic>
 
 #include "tbb/concurrent_queue.h"
 
@@ -13,11 +14,17 @@
 
 class Server {
  public:
-  Server(std::string model_repo, int port);
+  Server(int port);
+
+  ~Server();
+
+  void init();
 
   void run();
 
   void send_response(serverapi::Response* response);
+
+  void shutdown();
 
  private:
   void start_accept();
@@ -32,4 +39,6 @@ class Server {
   network::SrvSession* current_session;
 
   Controller* controller;
+
+  std::atomic_bool alive;
 };

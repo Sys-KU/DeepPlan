@@ -418,15 +418,17 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
     util.write_to_pbtxt(model_config, os.path.join(output_dir_path, 'config.pbtxt'))
     logging.info("Model config is created")
 
-    trace_module_path = os.path.join(output_dir_path, 'model.pt')
-    if (os.path.isfile(trace_module_path) is False) or (do_trace is True):
-        model.cuda()
-        logging.info("Creating trace module")
-        trace_module = generate_trace_module(model, x)
-        logging.info("trace module is created")
-        logging.info("Saving trace module to 'model.pt'")
-        torch.jit.save(trace_module, trace_module_path)
-        logging.info("Saving completed")
+    for d in range(torch.cuda.device_count()):
+        trace_module_path = os.path.join(output_dir_path, f'model{d}.pt')
+        if (os.path.isfile(trace_module_path) is False) or (do_trace is True):
+            model.cuda(d)
+            x = x.cuda(d)
+            logging.info("Creating trace module")
+            trace_module = generate_trace_module(model, x)
+            logging.info("trace module is created")
+            logging.info(f"Saving trace module to 'model{d}.pt'")
+            torch.jit.save(trace_module, trace_module_path)
+            logging.info("Saving completed")
 
 
 if __name__ == "__main__":

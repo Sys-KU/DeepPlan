@@ -1,5 +1,5 @@
-#include <core/model.h>
-#include <core/engine.h>
+#include <deepplan/model.h>
+#include <deepplan/engine.h>
 #include <util.h>
 
 #include <cassert>
@@ -9,7 +9,7 @@
 #include "tbb/concurrent_queue.h"
 #include <torch/script.h>
 
-namespace engine {
+namespace deepplan {
 
 class PCIeThread;
 class NVLinkThread;
@@ -141,7 +141,7 @@ class PCIeThread : public LoadThread {
   }
 };
 
-void init(void) {
+void Init(void) {
   n_device = torch::cuda::device_count();
 
   g_pcie_thrs.resize(n_device);
@@ -154,7 +154,7 @@ void init(void) {
   }
 }
 
-void deinit(void) {
+void Deinit(void) {
   for (int i = 0; i < n_device; i++) {
     g_pcie_thrs[i]->stop();
     g_nvlink_thrs[i]->stop();
@@ -193,7 +193,7 @@ class PipelineEngine : public Engine {
 
 static PipelineEngine engine;
 
-void run(Model* model, ScriptModuleInput& x) {
+void RunEngine(Model* model, ScriptModuleInput& x) {
   c10::InferenceMode guard;
   c10::cuda::CUDAGuard device_guard(model->target_device);
   engine.run(model, x);

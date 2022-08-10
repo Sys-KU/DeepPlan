@@ -1,6 +1,7 @@
 #pragma once
 
 #include <network/session.h>
+#include <util.h>
 #include <atomic>
 
 class Client {
@@ -13,13 +14,14 @@ class Client {
 
   void run();
 
+  void infer_async(std::vector<char>& input, int model_id,
+                   std::function<void(serverapi::Response* rsp)> onSuccess);
+
+  serverapi::UploadModelResponse* upload_model(std::string model_name, int n_models, EngineType engine_type, int mp_size);
+
   void close();
 
   void sync_close();
-
-  void infer(std::vector<uint8_t>& input, int model_id);
-
-  void infer(std::vector<uint8_t>& input, int model_id, std::function<void(void)> onSuccess);
 
   void shutdown();
 

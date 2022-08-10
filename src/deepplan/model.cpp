@@ -1,10 +1,12 @@
-#include <core/model.h>
-#include <core/engine.h>
+#include <deepplan/model.h>
+#include <deepplan/engine.h>
 #include <util.h>
 #include <deepplan.pb.h>
 #include <c10/cuda/CUDAGuard.h>
 
 #include <torch/script.h>
+
+namespace deepplan {
 
 static std::vector<ScriptModule> travel_layers(ScriptModule module, std::string name="") {
   std::vector<ScriptModule> traveled_layers;
@@ -24,30 +26,13 @@ static std::vector<ScriptModule> travel_layers(ScriptModule module, std::string 
   }
 }
 
-static std::vector<NamedModule> named_travel_layers(ScriptModule module, std::string name="") {
-  std::vector<NamedModule> traveled_layers;
-
-  if (module.children().size() == 0) {
-    traveled_layers.emplace_back(name, module);
-    return traveled_layers;
-  }
-  else {
-    for (auto name_child : module.named_children()) {
-      if (name_child.name.find("drop") != std::string::npos) continue;
-      if (name_child.name.find("relu") != std::string::npos) continue;
-      auto layers = named_travel_layers(name_child.value, name_child.name);
-      traveled_layers.insert(traveled_layers.end(), layers.begin(), layers.end());
-    }
-    return traveled_layers;
-  }
-}
-
 Model::Model(const std::string name, const EngineType type, const std::vector<int> devices)
   : model_name(name),
     engine_type(type) {
       if (!devices.empty()) {
         this->devices = devices;
       }
+      this->target_device = at::Device(at::kCUDA, this->devices[0]);
       init();
     }
 
@@ -56,11 +41,17 @@ void Model::init() {
   assert(model_repo);
 
   std::string model_prefix;
+  std::string script_name;
   std::string script_path;
   std::string config_path;
 
   model_prefix = std::string(model_repo) + "/" + model_name;
-  script_path = model_prefix + "/model.pt";
+  {
+    std::ostringstream ss;
+    ss << "model" << int(target_device.index()) << ".pt";
+    script_name = ss.str();
+  }
+  script_path = model_prefix + "/" + script_name;
   config_path = model_prefix + "/config.pbtxt";
 
   try {
@@ -70,7 +61,9 @@ void Model::init() {
       msg << "Failed to read " << config_path;
       throw std::runtime_error(msg.str());
     }
-    std::cout << "Success model load\n";
+    for (auto io : model_config.inputs()) {
+      this->input_configs.emplace_back(io);
+    }
   }
   catch (const c10::Error& e) {
     std::cerr << "Error loading the model\n";
@@ -81,13 +74,9 @@ void Model::init() {
     throw e;
   }
 
-  for (auto io : this->model_config.inputs())
-    this->inputs.push_back(InputConfig(io));
-
   this->layers = travel_layers(this->model);
   this->model.eval();
   this->model.to(at::kCPU);
-  this->target_device = at::Device(at::kCUDA, devices[0]);
   {
     c10::cuda::CUDAGuard device_guard(this->target_device);
     this->model.cuda_host();
@@ -165,7 +154,7 @@ void Model::init() {
 }
 
 void Model::forward(ScriptModuleInput& x) {
-  engine::run(this, x);
+  RunEngine(this, x);
 }
 
 void Model::to(at::Device device, bool non_blocking) {
@@ -180,4 +169,6 @@ void Model::clear()
 {
   model.clear();
   is_cuda = false;
+}
+
 }

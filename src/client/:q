@@ -1,0 +1,98 @@
+#include <iostream>
+
+#include <client/client.h>
+#include <util.h>
+#include <server_api.h>
+
+Client::Client()
+  : alive(true),
+    network_thr(std::bind(&Client::run, this)) {};
+
+void Client::infer(std::vector<char>& input, int model_id) {
+  uint64_t t_send = util::now();
+
+  auto onSuccess = [this, t_send](serverapi::Response* rsp) {
+    uint64_t t_receive = util::now();
+    std::cout << "rcv success\n";
+    std::cout << (t_receive-t_send) / 1e6 << " ms\n";
+  };
+
+  serverapi::InferenceRequest request;
+
+  request.model_id = model_id;
+  request.batch_size = 1;
+  request.input_size = input.size();
+  request.input = input.data();
+
+  session->send_request_async(request, onSuccess);
+}
+
+Client::~Client() {
+  if (alive)
+    shutdown();
+}
+
+void Client::upload_model(std::string model_name) {
+  serverapi::UploadModelRequest request;
+
+  request.model_name = model_name;
+
+  auto onSuccess = [this](serverapi::Response* rsp) {
+    std::cout << "Success Upload\n";
+  };
+
+  auto response = session->send_request(request, onSuccess);
+
+  return;
+}
+
+void Client::close() {
+  serverapi::CloseRequest request;
+
+  request.dummy = 0;
+
+  auto onSuccess = [this](serverapi::Response* rsp) {
+    std::cout << "Success Close\n";
+  };
+
+  auto response = session->send_request(request, onSuccess);
+}
+
+void Client::connect(const std::string& srv_ip, const std::string& port) {
+  try {
+    session = new network::ClientSession(io_service_);
+
+    session->connect(srv_ip, port);
+  }
+ catch (std::exception& e) { io_service_.stop();
+    std::cerr << e.what() << "\n";
+  }
+
+  return;
+}
+
+void Client::run() {
+  while (alive) {
+    try {
+      boost::asio::io_service::work work(io_service_);
+      io_service_.run();
+    } catch (std::exception& e) {
+      alive.store(false);
+      std::cerr << "Exception in network thread: " << e.what();
+    } catch (const char* m) {
+      alive.store(false);
+      std::cerr << "Exception in network thread: " << m;
+    }
+  }
+}
+
+void Client::shutdown() {
+  session->await_completion();
+
+  this->close();
+
+  alive.store(false);
+  io_service_.stop();
+  if (network_thr.joinable())
+    network_thr.join();
+}
