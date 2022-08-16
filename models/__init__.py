@@ -1,4 +1,5 @@
 import torch
+from . import vision
 from transformers import AutoModel
 from enum import Enum
 from typing import Union, List
@@ -37,7 +38,7 @@ class ModelConfig:
     def generateModel(self):
         model = None
         if self.model_type  == ModelType.CNN:
-            model = torch.hub.load("pytorch/vision:v0.10.0", self.model_name)
+            model = getattr(vision, self.model_name)()
         elif self.model_type == ModelType.TRANSFORMER:
             model = AutoModel.from_pretrained(self.model_name, torchscript=True)
             model.num_layers = self.num_layers

@@ -18,7 +18,6 @@ static std::vector<ScriptModule> travel_layers(ScriptModule module, std::string 
   else {
     for (auto name_child : module.named_children()) {
       if (name_child.name.find("drop") != std::string::npos) continue;
-      if (name_child.name.find("relu") != std::string::npos) continue;
       auto layers = travel_layers(name_child.value, name_child.name);
       traveled_layers.insert(traveled_layers.end(), layers.begin(), layers.end());
     }

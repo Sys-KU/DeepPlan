@@ -20,8 +20,7 @@ def travel_layers(mod, name_path=None):
         name_path = mod.__class__.__qualname__
 
     if len(list(mod.children())) == 0:
-        if isinstance(mod, torch.nn.Dropout) or \
-           isinstance(mod, torch.nn.ReLU):
+        if isinstance(mod, torch.nn.Dropout):
             return []
 
         _name_path = f"{name_path}.{mod.__class__.__qualname__}"
