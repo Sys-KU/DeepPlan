@@ -48,8 +48,8 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
   int n_types = sizeof(engine_types) / 20;
   bool found = false;
 
-  options->num_warmup  = 10;
-  options->num_test    = 100;
+  options->num_warmup  = 20;
+  options->num_test    = 200;
   options->batch_size  = 1;
   options->engine_type = EngineType::IN_MEMORY;
   options->devices     = std::vector<int>(1, 0); // = [0]
@@ -111,6 +111,8 @@ void benchmark(BenchmarkOptions* options) {
   int num_test   = options->num_test;
   int batch_size  = options->batch_size;
   at::Device target_device(at::kCUDA, options->devices[0]);
+
+  torch::NoGradGuard no_grad;
 
   deepplan::Model* model = new deepplan::Model(
                                             options->model_name,

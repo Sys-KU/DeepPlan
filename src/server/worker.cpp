@@ -11,7 +11,10 @@ Worker::Worker(int device)
     }
 
 void Worker::run() {
+  torch::NoGradGuard no_grad;
+
   InferTask task;
+
   while (alive) {
     while (queue_.try_pop(task)) {
       auto request = task.request;

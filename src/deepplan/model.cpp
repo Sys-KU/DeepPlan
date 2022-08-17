@@ -74,6 +74,7 @@ void Model::init() {
   }
 
   this->layers = travel_layers(this->model);
+  this->n_layers = this->layers.size();
   this->model.eval();
   this->model.to(at::kCPU);
   {
@@ -85,7 +86,6 @@ void Model::init() {
     case EngineType::IN_MEMORY:
     case EngineType::ON_DEMAND:
     case EngineType::PIPESWITCH:
-      this->n_layers = this->layers.size();
       for (int i = 0; i < this->n_layers; i++) {
         this->load_layer_idxs.push_back(i);
       }
@@ -166,8 +166,10 @@ void Model::to(at::Device device, bool non_blocking) {
 
 void Model::clear()
 {
-  model.clear();
-  is_cuda = false;
+  if (this->is_cuda) {
+    model.clear();
+    is_cuda = false;
+  }
 }
 
 }

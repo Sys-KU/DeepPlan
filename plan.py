@@ -8,6 +8,7 @@ import numpy as np
 import argparse
 import logging
 import copy
+from collections import OrderedDict
 from typing import Tuple
 from proto.deepplan_pb2 import ModelConfig, Plan, ModelInput, DataType
 
@@ -32,7 +33,7 @@ num_warmup = 10
 
 class MeasureRecorder():
     def __init__(self):
-        self.events = {}
+        self.events = OrderedDict()
 
     def record_start(self, key, stream=None):
         if key in self.events.keys():
@@ -108,9 +109,10 @@ def measure_load_layers(model):
         for layer in layers:
             measure_rec.record_start(layer.__qualname__)
 
-            layer.cuda()
+            layer.to("cuda", non_blocking=True)
             measure_rec.record_end(layer.__qualname__)
 
+        torch.cuda.synchronize()
         if step >= num_warmup:
             load_times_list.append(measure_rec.result())
         measure_rec.reset()

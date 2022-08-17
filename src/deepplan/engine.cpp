@@ -194,7 +194,6 @@ class PipelineEngine : public Engine {
 static PipelineEngine engine;
 
 void RunEngine(Model* model, ScriptModuleInput& x) {
-  c10::InferenceMode guard;
   c10::cuda::CUDAGuard device_guard(model->target_device);
   engine.run(model, x);
 }
