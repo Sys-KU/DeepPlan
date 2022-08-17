@@ -8,10 +8,10 @@ namespace deepplan {
 
 class Engine {
  public:
-  virtual void run(Model* model, ScriptModuleInput& x) = 0;
+  virtual torch::jit::IValue run(Model* model, ScriptModuleInput& x) = 0;
 };
 
-void RunEngine(Model* model, ScriptModuleInput& x);
+torch::jit::IValue RunEngine(Model* model, ScriptModuleInput& x);
 
 void Init(void);
 

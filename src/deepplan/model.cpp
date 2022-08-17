@@ -152,8 +152,9 @@ void Model::init() {
   this->is_cuda = false;
 }
 
-void Model::forward(ScriptModuleInput& x) {
-  RunEngine(this, x);
+torch::jit::IValue Model::forward(ScriptModuleInput& x) {
+  auto outputs = RunEngine(this, x);
+  return outputs;
 }
 
 void Model::to(at::Device device, bool non_blocking) {

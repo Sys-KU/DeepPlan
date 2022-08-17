@@ -139,7 +139,7 @@ void benchmark(BenchmarkOptions* options) {
       torch::cuda::synchronize(target_device.index());
     }
 
-    model->forward(inputs);
+    auto outputs = model->forward(inputs);
 
     torch::cuda::synchronize(target_device.index());
     t2 = util::now();

@@ -166,8 +166,9 @@ class PipelineEngine : public Engine {
   PipelineEngine()
     : Engine() {};
 
-  void run(Model* model, ScriptModuleInput& x) {
+  torch::jit::IValue run(Model* model, ScriptModuleInput& x) {
     int target_device = model->target_device.index();
+    torch::jit::IValue outputs;
 
     assert(n_device > target_device);
 
@@ -184,18 +185,21 @@ class PipelineEngine : public Engine {
 
     {
       at::cuda::CUDAStreamGuard stream_guard(g_exec_streams[target_device]);
-      auto out = model->model.forward(x);
+      outputs = model->model.forward(x);
     }
     model->is_cuda = true;
-    return;
+
+    return outputs;
   }
 };
 
 static PipelineEngine engine;
 
-void RunEngine(Model* model, ScriptModuleInput& x) {
+torch::jit::IValue RunEngine(Model* model, ScriptModuleInput& x) {
   c10::cuda::CUDAGuard device_guard(model->target_device);
-  engine.run(model, x);
+  auto outputs = engine.run(model, x);
+
+  return outputs;
 }
 
 }
