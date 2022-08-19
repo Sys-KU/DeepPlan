@@ -7,6 +7,7 @@
 struct WorkloadResult {
   double latency_99;
   double cold_rate;
+  double goodput_rate;
 };
 
 class Workload {
@@ -19,7 +20,7 @@ class Workload {
 
   void run();
 
-  WorkloadResult result();
+  WorkloadResult result(int slo);
 
   Client client;
 

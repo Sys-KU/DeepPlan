@@ -36,8 +36,12 @@ Model::Model(const std::string name, const EngineType type, const std::vector<in
     }
 
 void Model::init() {
-  const char *model_repo = getenv("MODEL_REPO");
-  assert(model_repo);
+  auto model_repo = std::getenv("MODEL_REPO");
+
+  if (model_repo == nullptr) {
+    std::cerr << "MODEL_REPO variable not set, exiting\n";
+    exit(EXIT_FAILURE);
+  }
 
   std::string model_prefix;
   std::string script_name;

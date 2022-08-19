@@ -21,7 +21,10 @@ struct ClientOptions {
   int slo;
   int n_warmup;
   int n_test;
+  bool csv;
 };
+
+static int csv_flag = 0;
 
 static struct option long_options[] =
 {
@@ -33,7 +36,9 @@ static struct option long_options[] =
   {"mp_size",       required_argument,  0,  'p' },
   {"engine",        required_argument,  0,  'e' },
   {"slo",           required_argument,  0,  's' },
-  {0,               0,                  0,   0  }
+
+  {"csv",           no_argument,        &csv_flag,  1},
+  {0, 0, 0, 0}
 };
 
 static void print_usage(char* program_name) {
@@ -60,6 +65,7 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
   options->n_warmup  = 1000;
   options->n_test    = 10000;
   options->engine_type = EngineType::DEEPPLAN;
+  options->slo       = 100;
 
   while ((flag = getopt_long(argc, argv, "c:e:hm:r:s:w:", long_options, NULL)) != -1) { 
     switch (flag) {
@@ -130,6 +136,8 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
         bool found = false;
     }
   }
+
+  options->csv = csv_flag;
 }
 
 void simple_experiment(ClientOptions* options) {
@@ -138,6 +146,7 @@ void simple_experiment(ClientOptions* options) {
   int rate = options->rate;
   int mp_size = options->mp_size;
   EngineType engine_type = options->engine_type;
+  int slo = options->slo;
 
   int n_warmup = options->n_warmup;
   int n_test = options->n_test;
@@ -157,10 +166,11 @@ void simple_experiment(ClientOptions* options) {
   std::cout << "Test...\n";
   workload->run();
 
-  auto result = workload->result();
+  auto result = workload->result(slo);
 
   std::cout << "99% Latency: " << result.latency_99 << " ms\n";
   std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
+  std::cout << "Goodput Rate: " << result.goodput_rate << " %\n";
 }
 
 void bursty_experiment(ClientOptions* options) {
@@ -168,6 +178,7 @@ void bursty_experiment(ClientOptions* options) {
   int concurrency = options->concurrency;
   int rate = options->rate;
   int mp_size = options->mp_size;
+  int slo = options->slo;
   EngineType engine_type = options->engine_type;
 
   auto model_loader = new ModelLoader(model_name, concurrency, engine_type, mp_size,
@@ -185,14 +196,16 @@ void bursty_experiment(ClientOptions* options) {
   }
 
   std::cout << "Bursty Experiment\n";
+  std::cout << "Concurrency, 99% Latecny(ms), Cold Start Rate(%), Goodput Rate(%)\n";
   for (int i = 0; i < concurrency; i++) {
-    std::cout << "Progress " << i+1  << " / " << concurrency << "\n";
     warmups[i]->run();
     workloads[i]->run();
-    auto result = workloads[i]->result();
+    auto result = workloads[i]->result(slo);
 
-    std::cout << "99% Latency: " << result.latency_99 << " ms\n";
-    std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
+    std::cout << i+1 << ", ";
+    std::cout << result.latency_99 << ", ";
+    std::cout << result.cold_rate << ", ";
+    std::cout << result.goodput_rate << "\n";
   }
 }
 
@@ -202,6 +215,7 @@ void azure_experiment(ClientOptions* options) {
   int rate = options->rate;
   int mp_size = options->mp_size;
   EngineType engine_type = options->engine_type;
+  int slo = options->slo;
 
   auto model_loader = new ModelLoader(model_name, concurrency, engine_type, mp_size,
                                       "127.0.0.1", "4321");
@@ -220,12 +234,16 @@ void azure_experiment(ClientOptions* options) {
   }
 
   std::cout << "Azure Experiment\n";
+  std::cout << "Minutes, Offered Load, 99% Latecny(ms), Cold Start Rate(%), Goodput Rate(%)\n";
   for (int i = 0; i < concurrency; i++) {
     workloads[i]->run();
-    auto result = workloads[i]->result();
+    auto result = workloads[i]->result(slo);
 
-    std::cout << "99% Latency: " << result.latency_99 << " ms\n";
-    std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
+    std::cout << i << ", ";
+    std::cout << workloads[i]->n_requests << ", ";
+    std::cout << result.latency_99 << ", ";
+    std::cout << result.cold_rate << ", ";
+    std::cout << result.goodput_rate << "\n";
   }
 
 }

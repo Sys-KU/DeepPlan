@@ -80,14 +80,20 @@ void Workload::run() {
   client.shutdown();
 }
 
-WorkloadResult Workload::result() {
+WorkloadResult Workload::result(int slo) {
   WorkloadResult result;
 
-  int index_99 = latencies.size() * 0.99 - 1;
   std::sort(latencies.begin(), latencies.end());
 
+  int index_99 = latencies.size() * 0.99 - 1;
+  int goodput_cnt = 0;
+
+  for (auto& latency : latencies)
+    if (latency <= slo) goodput_cnt++;
+
   result.latency_99 = latencies[index_99];
-  result.cold_rate = (double)cold_start_cnt / n_requests;
+  result.cold_rate = (double)cold_start_cnt / n_requests * 100;
+  result.goodput_rate = (double)goodput_cnt / n_requests * 100;
 
   return result;
 }
