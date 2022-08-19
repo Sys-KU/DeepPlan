@@ -8,7 +8,7 @@ build_path="$script_path/../../build"
 TARGET="benchmark"
 
 device_maps=("0" "0 2")
-models=("bert_base" "bert_large" "roberta_base" "roberta_large" "gpt2" "gpt2_medium")
+models=("resnet50" "resnet101" "bert_base" "bert_large" "roberta_base" "roberta_large" "gpt2" "gpt2_medium")
 engines=("pipeline" "deepplan")
 batch_size=1
 
@@ -75,3 +75,5 @@ output_file="$_output"
 
 cp $tmp_file $output_file
 echo "Created '$output_file' log file"
+
+eval "python graph.py $output_file figure.pdf"
