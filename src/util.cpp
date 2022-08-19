@@ -35,7 +35,7 @@ InputGenerator::InputGenerator(const char* model_repo)
   : model_repo_(model_repo) {assert(model_repo);}
 
 InputGenerator::InputGenerator()
-  : model_repo_(getenv("MODEL_REPO")) {assert(model_repo_);}
+  : model_repo_(getenv("PLAN_REPO")) {assert(model_repo_);}
 
 
 void InputGenerator::extend_rdata(DataType data_type, size_t size) {

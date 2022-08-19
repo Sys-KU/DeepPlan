@@ -1,8 +1,8 @@
 #!/bin/bash
 
-export MODEL_REPO=${MODEL_REPO}
+export PLAN_REPO=${PLAN_REPO}
 
-script_path="$( cd "$(dirname "$0")" ; pwd -P )"
+script_path=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 build_path="$script_path/../../build"
 
 TARGET="benchmark"
