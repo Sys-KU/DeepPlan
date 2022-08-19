@@ -4,27 +4,36 @@
 
 #include <random>
 
+struct WorkloadResult {
+  double latency_99;
+  double cold_rate;
+};
+
 class Workload {
  public:
   Workload(std::string model_name, int concurrency, int rate,
-           int n_requests, int mp_size, EngineType engine_type,
+           int n_requests, std::string addr, std::string port);
+
+  Workload(std::string model_name, std::vector<unsigned>& rates,
            std::string addr, std::string port);
 
   void run();
 
-  std::vector<double> result();
+  WorkloadResult result();
 
   Client client;
 
-  std::vector<double> latencies;
   std::string model_name;
   int concurrency;
   int rate;
   int n_requests;
-  int mp_size;
-  EngineType engine_type;
   std::string addr;
   std::string port;
+
+ private:
+  std::vector<std::pair<double, int>> _traces;
+  std::vector<double> latencies;
+  int cold_start_cnt = 0;
 };
 
 class ModelLoader {

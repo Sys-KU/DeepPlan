@@ -49,7 +49,6 @@ void Client::close() {
   request.dummy = 0;
 
   auto onSuccess = [this](serverapi::Response* rsp) {
-    std::cout << "Success Close\n";
   };
 
   auto response = session->send_request(request, onSuccess);

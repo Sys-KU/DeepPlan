@@ -1,48 +1,77 @@
 #include <client/workload.h>
 
 Workload::Workload(std::string model_name, int concurrency, int rate,
-                   int n_requests, int mp_size, EngineType engine_type,
-                   std::string addr, std::string port)
+                   int n_requests, std::string addr, std::string port)
     : model_name(model_name),
       concurrency(concurrency),
       rate(rate),
       n_requests(n_requests),
-      mp_size(mp_size),
-      engine_type(engine_type),
+      _traces(n_requests),
       addr(addr),
-      port(port) {};
+      port(port) {
+        std::minstd_rand gen(0);
+        std::uniform_int_distribution<> udist(0, concurrency-1);
+        std::exponential_distribution<double> edist(rate);
+
+        for (auto& trace : _traces) {
+          trace.first = edist(gen);
+          trace.second = udist(gen);
+        }
+      };
+
+Workload::Workload(std::string model_name, std::vector<unsigned>& rates,
+                   std::string addr, std::string port)
+  : model_name(model_name),
+    _traces(0),
+    addr(addr),
+    port(port) {
+      std::minstd_rand gen(0);
+
+      int cnt = 0;
+      for (int i = 0; i < rates.size(); i++) {
+        double itv = 0;
+        std::exponential_distribution<double> edist(rates[i]/60.0);
+        cnt += rates[i];
+
+        itv = edist(gen);
+        while (itv < 60) {
+          _traces.push_back({itv, i});
+          itv += edist(gen);
+        }
+      }
+
+      sort(_traces.begin(), _traces.end(),
+          [](auto& a, auto& b) { return a.first < b.first;});
+
+      for (int i = _traces.size()-1; i > 0; i--) {
+        _traces[i].first -= _traces[i-1].first;
+      }
+
+      n_requests = _traces.size();
+    };
 
 void Workload::run() {
   client.connect(addr, port);
-
-  // Set seed to 0;
-  std::minstd_rand gen(0);
-  std::uniform_int_distribution<> udist(0, concurrency-1);
-  std::exponential_distribution<double> edist(rate);
-
-  std::vector<int> model_ids(n_requests);
-  std::vector<double> intervals(n_requests);
-
-  for (auto& id : model_ids) id = udist(gen);
-  for (auto& itv : intervals) itv = edist(gen);
 
   util::InputGenerator input_generator;
 
   std::vector<char> input;
   input_generator.generate_input(model_name, 1, &input);
 
-
-  for (int i = 0; i < n_requests; i++) {
-    int model_id = model_ids[i];
-    double interval = intervals[i];
+  for (auto& trace : _traces) {
+    double interval = trace.first;
+    int model_id = trace.second;
 
     usleep(interval*1e6);
 
     uint64_t t_send = util::now();
     auto onSuccess = [this, t_send](serverapi::Response* rsp) {
+      auto response = dynamic_cast<serverapi::InferenceResponse*>(rsp);
       uint64_t t_receive = util::now();
       uint64_t latency = (t_receive-t_send) / 1e6;
+
       this->latencies.push_back(latency);
+      if (response->is_cold) this->cold_start_cnt++;
     };
 
     client.infer_async(input, model_id, onSuccess);
@@ -51,9 +80,16 @@ void Workload::run() {
   client.shutdown();
 }
 
-std::vector<double> Workload::result() {
+WorkloadResult Workload::result() {
+  WorkloadResult result;
+
+  int index_99 = latencies.size() * 0.99 - 1;
   std::sort(latencies.begin(), latencies.end());
-  return latencies;
+
+  result.latency_99 = latencies[index_99];
+  result.cold_rate = (double)cold_start_cnt / n_requests;
+
+  return result;
 }
 
 ModelLoader::ModelLoader(std::string model_name, int n_models, EngineType engine_type,

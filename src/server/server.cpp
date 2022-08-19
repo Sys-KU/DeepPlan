@@ -57,8 +57,6 @@ void Server::handle_accept(network::SrvSession* new_session,
     return;
   }
 
-  std::cout << "Accept!\n";
-
   // FIXME: Should enable to handle multi client
   new_session->established();
   current_session = new_session;
