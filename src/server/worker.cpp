@@ -58,16 +58,18 @@ void Worker::run() {
   }
 }
 
-void Worker::init_model(std::string model_name, int n_models,
+void Worker::init_model(std::vector<std::string> model_names, int n_models,
                         EngineType engine_type, std::vector<int> devices) {
   if (model_manager == nullptr) {
     size_t free;
     size_t total;
     size_t padding_size = size_t(5) * (1 << 30); // 4GB
+    int n_models_per = n_models / model_names.size();
 
     model_manager = new ModelManager(engine_type);
-    for (int i = 0; i < n_models; i++)
-      model_manager->add_model(model_name, devices);
+    for (auto model_name : model_names)
+      for (int i = 0; i < n_models_per; i++)
+        model_manager->add_model(model_name, devices);
 
     cudaError_t err = cudaMemGetInfo(&free, &total);
     if (err != cudaSuccess) {

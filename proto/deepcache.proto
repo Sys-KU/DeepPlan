@@ -21,12 +21,11 @@ message InferenceReqProto {
 message InferenceRspProto {
 	required uint32 req_id = 1;
 	required bool is_cold = 2;
-	required int32 dummy = 3;
 }
 
 message UploadModelReqProto {
 	required uint32 req_id = 1;
-	required string model_name = 2;
+	repeated string model_names = 2;
 	required uint32 n_models = 3;
 	required uint32 engine_type = 4;
 	required uint32 mp_size = 5;
@@ -34,15 +33,12 @@ message UploadModelReqProto {
 
 message UploadModelRspProto {
 	required uint32 req_id = 1;
-	required int32 dummy = 2;
 }
 
 message CloseReqProto {
 	required uint32 req_id = 1;
-	required int32 dummy = 2;
 }
 
 message CloseRspProto {
 	required uint32 req_id = 1;
-	required int32 dummy = 2;
 }

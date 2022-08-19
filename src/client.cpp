@@ -13,7 +13,7 @@ typedef enum {
 
 struct ClientOptions {
   WorkloadType workload_type;
-  std::string model_name;
+  std::vector<std::string> model_names;
   int concurrency;
   int rate;
   int mp_size;
@@ -73,7 +73,14 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
         print_usage(argv[0]);
         break;
       case 'm':
-        options->model_name = std::string(optarg);
+        optind--;
+        {
+          std::vector<std::string> model_names;
+          for ( ; optind < argc && *argv[optind] != '-'; optind++) {
+            model_names.push_back(std::string(argv[optind]));
+          }
+          options->model_names = model_names;
+        }
         break;
       case 'c':
         options->concurrency = (int)strtol(optarg, NULL, 10);
@@ -141,7 +148,7 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
 }
 
 void simple_experiment(ClientOptions* options) {
-  std::string model_name = options->model_name;
+  std::vector<std::string> model_names = options->model_names;
   int concurrency = options->concurrency;
   int rate = options->rate;
   int mp_size = options->mp_size;
@@ -151,20 +158,20 @@ void simple_experiment(ClientOptions* options) {
   int n_warmup = options->n_warmup;
   int n_test = options->n_test;
 
-  auto model_loader = new ModelLoader(model_name, concurrency, engine_type, mp_size,
+  auto model_loader = new ModelLoader(model_names, concurrency, engine_type, mp_size,
                                       "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();
 
-  auto warmup = new Workload(model_name, concurrency, rate, n_warmup, "127.0.0.1", "4321");
-  auto workload = new Workload(model_name, concurrency, rate, n_test, "127.0.0.1", "4321");
+  auto warmup = new Workload(concurrency, rate, n_warmup, "127.0.0.1", "4321");
+  auto workload = new Workload(concurrency, rate, n_test, "127.0.0.1", "4321");
 
   std::cout << "Warmup...\n";
-  warmup->run();
+  warmup->run(model_loader->inputs);
 
   std::cout << "Test...\n";
-  workload->run();
+  workload->run(model_loader->inputs);
 
   auto result = workload->result(slo);
 
@@ -174,14 +181,14 @@ void simple_experiment(ClientOptions* options) {
 }
 
 void bursty_experiment(ClientOptions* options) {
-  std::string model_name = options->model_name;
+  std::vector<std::string> model_names = options->model_names;
   int concurrency = options->concurrency;
   int rate = options->rate;
   int mp_size = options->mp_size;
   int slo = options->slo;
   EngineType engine_type = options->engine_type;
 
-  auto model_loader = new ModelLoader(model_name, concurrency, engine_type, mp_size,
+  auto model_loader = new ModelLoader(model_names, concurrency, engine_type, mp_size,
                                       "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
@@ -190,16 +197,16 @@ void bursty_experiment(ClientOptions* options) {
   std::vector<Workload*> warmups;
   std::vector<Workload*> workloads;
   for (int i = 1; i <= concurrency; i++) {
-    warmups.push_back(new Workload(model_name, i, rate, rate, "127.0.0.1", "4321"));
+    warmups.push_back(new Workload(i, rate, rate, "127.0.0.1", "4321"));
 
-    workloads.push_back(new Workload(model_name, i, rate, rate, "127.0.0.1", "4321"));
+    workloads.push_back(new Workload(i, rate, rate, "127.0.0.1", "4321"));
   }
 
   std::cout << "Bursty Experiment\n";
   std::cout << "Concurrency, 99% Latecny(ms), Cold Start Rate(%), Goodput Rate(%)\n";
   for (int i = 0; i < concurrency; i++) {
-    warmups[i]->run();
-    workloads[i]->run();
+    warmups[i]->run(model_loader->inputs);
+    workloads[i]->run(model_loader->inputs);
     auto result = workloads[i]->result(slo);
 
     std::cout << i+1 << ", ";
@@ -210,14 +217,14 @@ void bursty_experiment(ClientOptions* options) {
 }
 
 void azure_experiment(ClientOptions* options) {
-  std::string model_name = options->model_name;
+  std::vector<std::string> model_names = options->model_names;
   int concurrency = options->concurrency;
   int rate = options->rate;
   int mp_size = options->mp_size;
   EngineType engine_type = options->engine_type;
   int slo = options->slo;
 
-  auto model_loader = new ModelLoader(model_name, concurrency, engine_type, mp_size,
+  auto model_loader = new ModelLoader(model_names, concurrency, engine_type, mp_size,
                                       "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
@@ -230,13 +237,13 @@ void azure_experiment(ClientOptions* options) {
   int period = 60;
   std::vector<Workload*> workloads;
   for (int p = 0; p < period; p++) {
-    workloads.push_back(new Workload(model_name, scaled_traces[p], "127.0.0.1", "4321"));
+    workloads.push_back(new Workload(scaled_traces[p], "127.0.0.1", "4321"));
   }
 
   std::cout << "Azure Experiment\n";
   std::cout << "Minutes, Offered Load, 99% Latecny(ms), Cold Start Rate(%), Goodput Rate(%)\n";
   for (int i = 0; i < concurrency; i++) {
-    workloads[i]->run();
+    workloads[i]->run(model_loader->inputs);
     auto result = workloads[i]->result(slo);
 
     std::cout << i << ", ";

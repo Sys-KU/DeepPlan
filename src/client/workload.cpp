@@ -1,9 +1,8 @@
 #include <client/workload.h>
 
-Workload::Workload(std::string model_name, int concurrency, int rate,
+Workload::Workload(int concurrency, int rate,
                    int n_requests, std::string addr, std::string port)
-    : model_name(model_name),
-      concurrency(concurrency),
+    : concurrency(concurrency),
       rate(rate),
       n_requests(n_requests),
       _traces(n_requests),
@@ -19,10 +18,9 @@ Workload::Workload(std::string model_name, int concurrency, int rate,
         }
       };
 
-Workload::Workload(std::string model_name, std::vector<unsigned>& rates,
+Workload::Workload(std::vector<unsigned>& rates,
                    std::string addr, std::string port)
-  : model_name(model_name),
-    _traces(0),
+  : _traces(0),
     addr(addr),
     port(port) {
       std::minstd_rand gen(0);
@@ -50,13 +48,8 @@ Workload::Workload(std::string model_name, std::vector<unsigned>& rates,
       n_requests = _traces.size();
     };
 
-void Workload::run() {
+void Workload::run(std::vector<std::vector<char>>& inputs) {
   client.connect(addr, port);
-
-  util::InputGenerator input_generator;
-
-  std::vector<char> input;
-  input_generator.generate_input(model_name, 1, &input);
 
   for (auto& trace : _traces) {
     double interval = trace.first;
@@ -74,7 +67,7 @@ void Workload::run() {
       if (response->is_cold) this->cold_start_cnt++;
     };
 
-    client.infer_async(input, model_id, onSuccess);
+    client.infer_async(inputs[model_id], model_id, onSuccess);
   }
 
   client.shutdown();
@@ -98,9 +91,10 @@ WorkloadResult Workload::result(int slo) {
   return result;
 }
 
-ModelLoader::ModelLoader(std::string model_name, int n_models, EngineType engine_type,
+ModelLoader::ModelLoader(std::vector<std::string> model_names,
+                         int n_models, EngineType engine_type,
                          int mp_size, std::string addr, std::string port)
-  : model_name(model_name),
+  : model_names(model_names),
     n_models(n_models),
     engine_type(engine_type),
     mp_size(mp_size),
@@ -112,15 +106,19 @@ void ModelLoader::run() {
 
   util::InputGenerator input_generator;
 
-  std::vector<char> input;
-  input_generator.generate_input(model_name, 1, &input);
+  inputs.resize(n_models);
 
-  client.upload_model(model_name, n_models, engine_type, mp_size);
+  int n_models_per_type = n_models / model_names.size();
+  for (int i = 0; i < n_models; i++) {
+    input_generator.generate_input(model_names[i/n_models_per_type], 1, &inputs[i]);
+  }
+
+  client.upload_model(model_names, n_models, engine_type, mp_size);
 
   for (int i = 0; i < n_models; i++) {
     auto onSuccess = [this](serverapi::Response* rsp) {};
 
-    client.infer_async(input, i, onSuccess);
+    client.infer_async(inputs[i], i, onSuccess);
   }
 
   client.shutdown();

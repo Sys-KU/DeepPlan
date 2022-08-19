@@ -70,7 +70,7 @@ class Worker {
       serverapi::InferenceRequest* request,
       std::function<void(serverapi::InferenceResponse*)> cb);
 
-  void init_model(std::string model_name, int n_models,
+  void init_model(std::vector<std::string> model_names, int n_models,
                   EngineType engine_type, std::vector<int> devices);
 
   void reset_model();

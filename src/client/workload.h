@@ -12,19 +12,19 @@ struct WorkloadResult {
 
 class Workload {
  public:
-  Workload(std::string model_name, int concurrency, int rate,
+  Workload(int concurrency, int rate,
            int n_requests, std::string addr, std::string port);
 
-  Workload(std::string model_name, std::vector<unsigned>& rates,
+  Workload(std::vector<unsigned>& rates,
            std::string addr, std::string port);
 
-  void run();
+  void run(std::vector<std::vector<char>>& inputs);
 
   WorkloadResult result(int slo);
 
   Client client;
 
-  std::string model_name;
+  std::vector<std::string> model_names;
   int concurrency;
   int rate;
   int n_requests;
@@ -39,14 +39,16 @@ class Workload {
 
 class ModelLoader {
  public:
-  ModelLoader(std::string model_name, int n_models, EngineType engine_type,
+  ModelLoader(std::vector<std::string> model_name,
+              int n_models, EngineType engine_type,
               int mp_size, std::string addr, std::string port);
 
   void run();
 
   Client client;
 
-  std::string model_name;
+  std::vector<std::vector<char>> inputs;
+  std::vector<std::string> model_names;
   int n_models;
   EngineType engine_type;
   int mp_size;

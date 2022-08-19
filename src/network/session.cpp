@@ -55,7 +55,6 @@ bool SrvSession::completed_receive(message_connection* conn, message_rx* req) {
     auto response = new serverapi::CloseResponse();
 
     response->req_id = req->get_rx_req_id();
-    response->dummy = 0;
 
     send_response(response);
 

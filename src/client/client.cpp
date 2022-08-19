@@ -25,10 +25,10 @@ Client::~Client() {
     shutdown();
 }
 
-serverapi::UploadModelResponse* Client::upload_model(std::string model_name, int n_models, EngineType engine_type, int mp_size) {
+serverapi::UploadModelResponse* Client::upload_model(std::vector<std::string> model_names, int n_models, EngineType engine_type, int mp_size) {
   serverapi::UploadModelRequest request;
 
-  request.model_name = model_name;
+  request.model_names = model_names;
   request.n_models = n_models;
   request.engine_type = engine_type;
   request.mp_size = mp_size;
@@ -45,8 +45,6 @@ serverapi::UploadModelResponse* Client::upload_model(std::string model_name, int
 
 void Client::close() {
   serverapi::CloseRequest request;
-
-  request.dummy = 0;
 
   auto onSuccess = [this](serverapi::Response* rsp) {
   };
