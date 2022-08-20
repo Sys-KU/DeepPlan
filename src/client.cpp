@@ -67,7 +67,7 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
   options->engine_type = EngineType::DEEPPLAN;
   options->slo       = 100;
 
-  while ((flag = getopt_long(argc, argv, "c:e:hm:r:s:w:", long_options, NULL)) != -1) { 
+  while ((flag = getopt_long(argc, argv, "c:e:hm:r:s:w:p:", long_options, NULL)) != -1) {
     switch (flag) {
       case 'h':
         print_usage(argv[0]);

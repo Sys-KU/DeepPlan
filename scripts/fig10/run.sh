@@ -1,5 +1,12 @@
 #!/bin/bash
 
+PLAN_REPO=${PLAN_REPO}
+
+if [[ -z "$PLAN_REPO" ]]; then
+	echo "PLAN_REPO environment variable not set, please set this variable"
+	return
+fi
+
 export PLAN_REPO=${PLAN_REPO}
 
 script_path=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
