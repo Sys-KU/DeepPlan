@@ -8,6 +8,7 @@
 #include <c10/cuda/CUDAGuard.h>
 #include "tbb/concurrent_queue.h"
 #include <torch/script.h>
+#include <torch/csrc/jit/runtime/graph_executor.h>
 
 namespace deepplan {
 
@@ -143,6 +144,7 @@ class PCIeThread : public LoadThread {
 
 void Init(void) {
   n_device = torch::cuda::device_count();
+  torch::jit::getBailoutDepth() = 0;
 
   g_pcie_thrs.resize(n_device);
   g_nvlink_thrs.resize(n_device);
