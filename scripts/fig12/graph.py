@@ -3,7 +3,6 @@
 
 # In[3]:
 
-
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -45,10 +44,10 @@ color_list = ['#AEB6BF', '#5D6D7E', '#273746']
 marker_list = ['o', '^', 'P']
 line_list = ['-', 'dotted', 'dashed']
 
-# csv file list
-csv_list = ["pipeswitch.csv", "dha.csv", "dha_pt.csv"]
+# Prepare these files
+engine_list = ["pipeswitch.csv", "dha.csv", "dha_pt.csv"]
 
-ylim_list = { # graph 모양 확인하고 조절해야함.
+ylim_list = {
             "bertbase": [(0, 300), (30, 105), (0, 60)],
             "bertlarge": [],
             "robertabase": [],
@@ -70,8 +69,8 @@ MARKER_SIZE = 10
 
 
 plt.figure(figsize=SIZE_FIGURE)
-gs = gridspec.GridSpec(nrows=3, # row 몇 개
-                       ncols=1, # col 몇 개
+gs = gridspec.GridSpec(nrows=3,
+                       ncols=1,
                        height_ratios=[1, 0.8, 0.8]
                       )
 
@@ -79,8 +78,8 @@ li_ax = []
 for i in range(0, 3):
     li_ax.append(plt.subplot(gs[i]))
 
-for i, engine in enumerate(csv_list):
-    result = get_data(engine) # Read data
+for i, engine in enumerate(engine_list):
+    result = get_data(engine)
 
     for j, ax in enumerate(li_ax):
         
@@ -106,9 +105,7 @@ for i, engine in enumerate(csv_list):
 plt.legend(labels=label_list, bbox_to_anchor=(0.43, 3.55), ncol=3, loc='center', columnspacing=0.6,
            fontsize=FONTSIZE_LEGEND, edgecolor="#FFFFFF")
 
-# plt.ylabel(y_label, fontsize=FONTSIZE_LABEL, labelpad=10)
 plt.xlabel(x_label, fontsize=FONTSIZE_LABEL, labelpad=10)
-# li_ax[0].axhline(y=100, color='gray', linestyle='--') # SLO 설정
 
 plt.subplots_adjust(hspace=0.06)
 plt.rcParams["font.family"] = "Helvetica"
