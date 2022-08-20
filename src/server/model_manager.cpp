@@ -13,8 +13,10 @@ deepplan::Model* ModelManager::get_model(int model_id) {
 }
 
 void ModelManager::clear() {
-  for (auto model : models)
+  for (auto model : models) {
+    model->clear();
     delete model;
+  }
 }
 
 size_t getDeviceActiveMemorySize(int device){

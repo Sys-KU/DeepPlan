@@ -30,7 +30,7 @@ void Worker::run() {
       else {
         auto new_model = model_manager->get_model(request->model_id);
 
-        if (getDeviceActiveMemorySize(device.index()) >= capacity_) {
+        while (getDeviceActiveMemorySize(device.index()) >= capacity_) {
           auto evict_model = running_models->pop();
           evict_model->clear();
         }

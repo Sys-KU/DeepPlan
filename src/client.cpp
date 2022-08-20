@@ -21,10 +21,7 @@ struct ClientOptions {
   int slo;
   int n_warmup;
   int n_test;
-  bool csv;
 };
-
-static int csv_flag = 0;
 
 static struct option long_options[] =
 {
@@ -36,8 +33,6 @@ static struct option long_options[] =
   {"mp_size",       required_argument,  0,  'p' },
   {"engine",        required_argument,  0,  'e' },
   {"slo",           required_argument,  0,  's' },
-
-  {"csv",           no_argument,        &csv_flag,  1},
   {0, 0, 0, 0}
 };
 
@@ -144,7 +139,6 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
     }
   }
 
-  options->csv = csv_flag;
 }
 
 void simple_experiment(ClientOptions* options) {

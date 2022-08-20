@@ -63,26 +63,16 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
   bool should_setup = false;
 
   // Update if the setting parameters are different
-  if (model_names_ != model_names) {
-    model_names_ = model_names;
-    should_setup = true;
-  }
-  if (n_models_ < n_models) {
-    n_models_ = n_models;
-    should_setup = true;
-  }
-  if (engine_type_ != engine_type) {
-    engine_type_ = engine_type;
-    should_setup = true;
-  }
-  if (mp_size_ != mp_size) {
-    mp_size_ = mp_size;
+  if ((model_names_ != model_names) ||
+      (n_models_ < n_models) ||
+      (engine_type_ != engine_type) ||
+      (mp_size_ != mp_size)) {
     should_setup = true;
   }
 
   if (should_setup) {
     int n_workers = workers.size();
-    int n_models_per_worker = n_models_ / n_workers;
+    int n_models_per_worker = n_models / n_workers;
     std::vector<std::vector<int>> partitions(n_workers);
 
     for (int i = 0; i < n_workers; i++) {
@@ -96,9 +86,14 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
     std::cout << "Models setup...\n";
     for (int i = 0; i < n_workers; i++) {
       workers[i]->reset_model();
-      workers[i]->init_model(model_names_, n_models_per_worker,
-                             engine_type_, partitions[i]);
+      workers[i]->init_model(model_names, n_models_per_worker,
+                             engine_type, partitions[i]);
     }
+
+    model_names_ = model_names;
+    n_models_ = n_models;
+    engine_type_ = engine_type;
+    mp_size_ = mp_size;
 
     std::cout << "Modele setup complete\n";
   }
