@@ -150,7 +150,7 @@ void simple_experiment(ClientOptions* options) {
   int slo = options->slo;
 
   int n_warmup = options->n_warmup;
-  int n_test = options->n_test;
+  int n_test = rate * 100;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type, mp_size,
                                       "127.0.0.1", "4321");
