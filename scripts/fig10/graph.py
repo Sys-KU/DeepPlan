@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.ticker import MaxNLocator
 import sys
+import os
 import csv
 
 baseline = np.array([])
@@ -16,10 +17,14 @@ deepplan_dha = np.array([])
 deepplan_parallel = np.array([])
 deepplan_all = np.array([])
 
+target = sys.argv[1]
+target = target.strip()
+if target[0] != '/':
+    target = os.path.join(os.getcwd(), target)
+
 with open(sys.argv[1], 'r', encoding='utf-8') as f:
     rdr = csv.reader(f)
     for i, line in enumerate(rdr):
-        line = line[0].split("\t")
         baseline = np.append(baseline, float(line[0]))
         pipeswitch = np.append(pipeswitch, float(line[1]))
         deepplan_dha = np.append(deepplan_dha, float(line[2]))
@@ -77,3 +82,4 @@ plt.axhline(y=1.0, color='gray', linestyle='--')
 plt.tight_layout()
 #plt.show()
 plt.savefig(sys.argv[2], bbox_inches="tight", pad_inches=0.0)
+print("Saved graph to {}".format(sys.argv[2]))

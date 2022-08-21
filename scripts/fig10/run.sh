@@ -48,7 +48,7 @@ for model in "${models[@]}"; do
 		done
 	done
 
-	echo "" >> $tmp_file
+	printf "" >> $tmp_file
 done
 
 log_path="$script_path/logs"
@@ -83,4 +83,4 @@ output_file="$_output"
 cp $tmp_file $output_file
 echo "Created '$output_file' log file"
 
-eval "python graph.py $output_file figure.pdf"
+eval "python3 graph.py $output_file fig10.pdf"

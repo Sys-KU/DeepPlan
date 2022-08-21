@@ -8,12 +8,14 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import gridspec
 import sys
+import os
 import csv
 
-
-
 def get_data(target):
-    target = "./data/v100/bursty/engine/{}_{}".format(sys.argv[1], target)
+    target = "{}/{}_{}".format(sys.argv[1], sys.argv[2], target)
+    target = target.strip()
+    if target[0] != '/':
+        target = os.path.join(os.getcwd(), target)
 
     latency = np.array([])
     goodput = np.array([])
@@ -24,7 +26,6 @@ def get_data(target):
     with open(target, 'r', encoding='utf-8') as f:
         rdr = csv.reader(f)
         for i, line in enumerate(rdr):
-            line = line[0].split("\t")
             latency = np.append(latency, float(line[0]))
             goodput = np.append(goodput, float(line[1]))
             cold = np.append(cold, float(line[2]))
@@ -45,15 +46,15 @@ marker_list = ['o', '^', 'P']
 line_list = ['-', 'dotted', 'dashed']
 
 # Prepare these files
-engine_list = ["pipeswitch.csv", "dha.csv", "dha_pt.csv"]
+engine_list = ["pipeline.csv", "deepplan.csv", "deepplan+.csv"]
 
 ylim_list = {
-            "bertbase": [(0, 300), (30, 105), (0, 60)],
-            "bertlarge": [],
-            "robertabase": [],
-            "robertalarge": [],
+            "bert_base": [(0, 300), (30, 105), (0, 60)],
+            "bert_large": [],
+            "roberta_base": [],
+            "roberta_large": [],
             "gpt2": [],
-            "gpt2medium": []}
+            "gpt2_medium": []}
 
 
 x_label = "# of model instances (concurrency)"
@@ -82,10 +83,10 @@ for i, engine in enumerate(engine_list):
     result = get_data(engine)
 
     for j, ax in enumerate(li_ax):
-        
+
         ax.plot(x_value, result[j], linewidth = LINE_WIDTH, color=color_list[i], marker=marker_list[i], linestyle=line_list[i], markersize=MARKER_SIZE)
 
-        ax.set_ylim(ylim_list[sys.argv[1]][j])
+        ax.set_ylim(ylim_list[sys.argv[2]][j])
         ax.tick_params(axis='both', labelsize=FONTSIZE_TICK)
 
         ax.set_xticks(x_value)
@@ -96,7 +97,7 @@ for i, engine in enumerate(engine_list):
             ax.set_ylabel(y_label[j], fontsize=FONTSIZE_LABEL, labelpad=18)
 
 
-        if "bert" in sys.argv[1] and j == 0:
+        if j == 0:
             ax.axhline(y=100, color='gray', linestyle='--')
             ax.text(20, 150, "Target SLO", fontsize=FONTSIZE_TICK)
 
@@ -110,3 +111,5 @@ plt.xlabel(x_label, fontsize=FONTSIZE_LABEL, labelpad=10)
 plt.subplots_adjust(hspace=0.06)
 plt.rcParams["font.family"] = "Helvetica"
 plt.savefig(sys.argv[2], bbox_inches="tight", pad_inches=0.0)
+
+print("Saved graph to {}".format(sys.argv[2]))
