@@ -12,7 +12,7 @@ import os
 import csv
 
 def get_data(target):
-    target = "{}/{}_{}".format(sys.argv[1], sys.argv[2], target)
+    target = "{}/bert_base_{}".format(sys.argv[1], target)
     target = target.strip()
     if target[0] != '/':
         target = os.path.join(os.getcwd(), target)
@@ -86,7 +86,7 @@ for i, engine in enumerate(engine_list):
 
         ax.plot(x_value, result[j], linewidth = LINE_WIDTH, color=color_list[i], marker=marker_list[i], linestyle=line_list[i], markersize=MARKER_SIZE)
 
-        ax.set_ylim(ylim_list[sys.argv[2]][j])
+        ax.set_ylim(ylim_list["bert_base"][j])
         ax.tick_params(axis='both', labelsize=FONTSIZE_TICK)
 
         ax.set_xticks(x_value)

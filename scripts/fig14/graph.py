@@ -9,11 +9,14 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import gridspec
 import sys
+import os
 import csv
 
 def get_data(target):
-
-    target = "./data/v100/azure_bursty/{}".format(target)
+    target = "{}/{}".format(sys.argv[1], target)
+    target = target.strip()
+    if target[0] != '/':
+        target = os.path.join(os.getcwd(), target)
 
     if "offered" in target:
         offered_load = np.array([])
@@ -28,7 +31,6 @@ def get_data(target):
         rdr = csv.reader(f)
         if "offered" in target:
             for i, line in enumerate(rdr):
-                line = line[0].split("\t")
                 offered_load = np.append(offered_load, int(line[0]))
             return offered_load
 
@@ -131,4 +133,6 @@ plt.xlabel(x_label, fontsize=FONTSIZE_XLABEL, labelpad=10)
 
 plt.subplots_adjust(hspace=0.06)
 plt.rcParams["font.family"] = "Helvetica"
-plt.savefig(sys.argv[1], bbox_inches="tight", pad_inches=0.0)
+plt.savefig(sys.argv[2], bbox_inches="tight", pad_inches=0.0)
+
+print("Saved graph to {}".format(sys.argv[2]))

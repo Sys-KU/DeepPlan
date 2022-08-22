@@ -8,42 +8,45 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import sys
+import os
 import csv
 
 def get_data(model, engine):
-    target = "./data/v100/bursty/engine/{}_{}.csv".format(model, engine)
+    target = "{}/{}_{}.csv".format(sys.argv[1], model, engine)
+    target = target.strip()
+    if target[0] != '/':
+        target = os.path.join(os.getcwd(), target)
 
     lat = np.array([])
 
     with open(target, 'r', encoding='utf-8') as f:
         rdr = csv.reader(f)
         for i, line in enumerate(rdr):
-            line = line[0].split("\t")
             lat = np.append(lat, float(line[0]))
 
-    return result
+    return lat
 
 
 label_list = ["PipeSwitch", "DeepPlan (DHA)", "DeepPlan (PT+DHA)"]
 #color_list = ['#AEB6BF', '#5D6D7E', '#34495E', '#273746', '#273746']
 color_list = ['#AEB6BF', '#5D6D7E', '#273746']
-model_list = ["bertlarge", "gpt2"]
-engine_list = ["pipeswitch", "dha", "dha_pt"]
+model_list = ["bert_large", "gpt2"]
+engine_list = ["pipeline", "deepplan", "deepplan+"]
 marker_list = ['o', '^', 'P']
 line_list = ['-', 'dotted', 'dashed']
 
 x_value_list  = {
-                "bertlarge": [5 * i for i in range(1, 12)],
+                "bert_large": [5 * i for i in range(1, 12)],
                 "gpt2": [20 * i for i in range(1, 11)],
                 }
 
 ylim_list = { # graph 모양 확인하고 조절해야함.
-            "bertbase": [],
-            "bertlarge": [0, 850],
-            "robertabase": [],
-            "robertalarge": [],
+            "bert_base": [],
+            "bert_large": [0, 850],
+            "roberta_base": [],
+            "roberta_large": [],
             "gpt2": [0, 900],
-            "gpt2medium": []
+            "gpt2_medium": []
             }
 
 
@@ -66,7 +69,7 @@ for i in range(1, len(model_list) + 1):
 for i, model in enumerate(model_list):
 
     graph_title = ""
-    if model_list[i] == "bertlarge":
+    if model_list[i] == "bert_large":
         graph_title = "BERT-Large"
 
     elif model_list[i] == "gpt2":
@@ -93,4 +96,5 @@ plt.xlabel(x_label, fontsize=FONTSIZE_LABEL, labelpad=10)
 
 plt.subplots_adjust(hspace=0.35)
 plt.rcParams["font.family"] = "Helvetica"
-plt.savefig(sys.argv[1], bbox_inches="tight", pad_inches=0.0)
+plt.savefig(sys.argv[2], bbox_inches="tight", pad_inches=0.0)
+print("Saved graph to {}".format(sys.argv[2]))
