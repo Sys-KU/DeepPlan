@@ -12,7 +12,7 @@ exec_path="$script_path/../"
 
 TARGET="plan.py"
 
-models=("resnet50" "resnet101" "bert_base" "bert_large" "roberta_base" "roberta_large" "gpt2" "gpt2_medium")
+models=("resnet50" "resnet101" "bert_base" "bert_large" "roberta_base" "roberta_large" "gpt2" "gpt2_384" "gpt2_medium")
 
 if [ ! -d "$PLAN_REPO" ]; then
 	mkdir -p "$PLAN_REPO"

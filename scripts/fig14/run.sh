@@ -17,9 +17,9 @@ export PLAN_REPO=${PLAN_REPO}
 script_path=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 build_path="$script_path/../../build"
 
-model_list="bert_base bert_base bert_base bert_base bert_base roberta_base roberta_base roberta_base roberta_base"
+model_list="gpt2_384 bert_base bert_base bert_base bert_base roberta_base roberta_base roberta_base roberta_base"
 conc=216
-rate=100
+rate=150
 
 engines=("deepplan+" "deepplan" "pipeline")
 
@@ -86,7 +86,9 @@ for engine in "${engines[@]}"; do
 
 	output_file="$log_path/${engine}.csv"
 
-	cp $tmp_file $output_file
+	awk '$1 ~ /^[0-9]*,/ { print $0 }' $tmp_file > $output_file
+
+	echo "Created '$output_file' log file"
 done
 
 #eval "python3 graph.py $log_path fig14.pdf"

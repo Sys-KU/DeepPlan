@@ -63,17 +63,16 @@ def generate_T5_input(batch_size, shape, max_num):
 
 
 model_list = {
-        'vgg16': ModelConfig('vgg16', ModelType.CNN, [3, 224, 224], generate_CNN_input),
         'resnet50': ModelConfig('resnet50', ModelType.CNN, [3, 224, 224], generate_CNN_input),
         'resnet101': ModelConfig('resnet101', ModelType.CNN, [3, 224, 224], generate_CNN_input),
         'resnext50': ModelConfig('resnext50_32x4d', ModelType.CNN, [3, 224, 224], generate_CNN_input),
         'resnext101': ModelConfig('resnext101_32x8d', ModelType.CNN, [3, 224, 224], generate_CNN_input),
         'wide_resnet50': ModelConfig('wide_resnet50_2', ModelType.CNN, [3, 224, 224], generate_CNN_input),
         'wide_resnet101': ModelConfig('wide_resnet101_2', ModelType.CNN, [3, 224, 224], generate_CNN_input),
-        'inception_v3': ModelConfig('inception_v3', ModelType.CNN, [3, 224, 224], generate_CNN_input),
         'bert_base': ModelConfig('bert-base-uncased', ModelType.TRANSFORMER, [384], generate_TRS_input, max_num=30522, num_layers=12),
         'bert_large': ModelConfig('bert-large-uncased', ModelType.TRANSFORMER, [384], generate_TRS_input, max_num=30522, num_layers=24),
         'gpt2': ModelConfig('gpt2', ModelType.TRANSFORMER, [1024], generate_TRS_input, max_num=50257, num_layers=12),
+        'gpt2_384': ModelConfig('gpt2', ModelType.TRANSFORMER, [384], generate_TRS_input, max_num=50257, num_layers=12),
         'gpt2_medium': ModelConfig('gpt2-medium', ModelType.TRANSFORMER, [1024], generate_TRS_input, max_num=50257, num_layers=24),
         'bart_base': ModelConfig('facebook/bart-base', ModelType.TRANSFORMER, [384], generate_TRS_input, max_num=50265),
         't5_base': ModelConfig('t5-base', ModelType.TRANSFORMER, [300], generate_T5_input, max_num=32129, num_layers=12),
