@@ -63,7 +63,7 @@ void Worker::init_model(std::vector<std::string> model_names, int n_models,
   if (model_manager == nullptr) {
     size_t free;
     size_t total;
-    size_t padding_size = size_t(6) * (1 << 30); // 5GB
+    size_t padding_size = (size_t)(5.5 * (1 << 30)); // 6GB
     int n_models_per = n_models / model_names.size();
 
     model_manager = new ModelManager(engine_type);

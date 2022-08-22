@@ -228,7 +228,7 @@ void azure_experiment(ClientOptions* options) {
 
   azure::transpose(scaled_traces);
 
-  int period = 60;
+  int period = 180;
   std::vector<Workload*> workloads;
   for (int p = 0; p < period; p++) {
     workloads.push_back(new Workload(scaled_traces[p], "127.0.0.1", "4321"));
@@ -236,12 +236,12 @@ void azure_experiment(ClientOptions* options) {
 
   std::cout << "Azure Experiment\n";
   std::cout << "Minutes, Offered Load, 99% Latecny(ms), Cold Start Rate(%), Goodput Rate(%)\n";
-  for (int i = 0; i < concurrency; i++) {
-    workloads[i]->run(model_loader->inputs);
-    auto result = workloads[i]->result(slo);
+  for (int p = 0; p < period; p++) {
+    workloads[p]->run(model_loader->inputs);
+    auto result = workloads[p]->result(slo);
 
-    std::cout << i << ", ";
-    std::cout << workloads[i]->n_requests << ", ";
+    std::cout << p << ", ";
+    std::cout << workloads[p]->n_requests << ", ";
     std::cout << result.latency_99 << ", ";
     std::cout << result.cold_rate << ", ";
     std::cout << result.goodput_rate << "\n";
