@@ -68,29 +68,26 @@ class MeasureRecorder():
     def reset(self):
         self.events = {}
 
-def print_layer_state_table(naive_layers, static_layers, dynamic_layers, bench_dynamic_layers):
+def print_layer_state_table(naive_layers, static_layers, dynamic_layers):
     boundary_lines = "=" * 78
-    hyphens = "|{:<25}|{:<25}|{:<25}|{}".format('-'*25, '-'*25, '-'*25, '-'*25)
+    hyphens = "|{:<25}|{:<25}|{}".format('-'*25, '-'*25, '-'*25)
     print(boundary_lines)
-    print("|{:<25}|{:<25}|{:<25}|{}".format("Layer", "Load? (Static)", "Load? (Dynamic)", "Load? (Bench Dynamic)"))
+    print("|{:<25}|{:<25}|{}".format("Layer", "Load? (Static)", "Load? (Dynamic)"))
     print(hyphens)
     for i, layer in enumerate(naive_layers):
         layer_name = "{}-{}".format(layer['index'], layer['layer_type'])
         load_naive_layer = "O" if layer['exec_type'] == 0 else "X"
         load_static_layer = "O" if static_layers[i]['exec_type'] == 0 else "X"
         load_dynamic_layer = "O" if dynamic_layers[i]['exec_type'] == 0 else "X"
-        load_bench_dynamic_layer = "O" if bench_dynamic_layers[i]['exec_type'] == 0 else "X"
 
         size = layer['size']
         size /= (1024*1024)
 
-        print("|{:<20} ({:.3f} MB) |{} {:<25}|{} {:<25}|{} {}".format(layer_name, size,
+        print("|{:<20} ({:.3f} MB) |{} {:<25}|{} {}".format(layer_name, size,
                                                load_static_layer,
                                                "(direct-host-access)" if load_naive_layer != load_static_layer else "",
                                                load_dynamic_layer,
-                                               "(direct-host-access)" if load_naive_layer != load_dynamic_layer else "",
-                                               load_bench_dynamic_layer,
-                                               "(direct-host-access)" if load_naive_layer != load_bench_dynamic_layer else ""
+                                               "(direct-host-access)" if load_naive_layer != load_dynamic_layer else ""
                                                )),
     print(boundary_lines)
 
@@ -182,8 +179,6 @@ def dump_profile_info(model, x, file_name):
     layer_cuda_host_exec_times = measure_exec_layers(model, x)
 
     # Measure GPU Direct Access Exec Time with benchmark
-    torch.clear_benchmark()
-    layer_cuda_host_exec_bench_times = measure_exec_layers(model, x)
 
     layer_info_list = []
 
@@ -203,7 +198,6 @@ def dump_profile_info(model, x, file_name):
                         'load_time': layer_load_times[i],
                         'cuda_exec_time': layer_cuda_exec_times[i],
                         'cuda_host_exec_time': layer_cuda_host_exec_times[i],
-                        'cuda_host_exec_bench_time': layer_cuda_host_exec_bench_times[i],
                         'exec_type': 0 # 0: Load Then Execution, 1: Remote Direct Access Execution 2: CPU
                      }
 
@@ -372,14 +366,9 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
     static_layers = generate_static_plan(layers)
     dynamic_layers = generate_dynamic_plan(layers)
 
-    # Apply bench profile info for DHA to layer
-    for layer in layers:
-        layer['cuda_host_exec_time'] = layer['cuda_host_exec_bench_time']
-
-    bench_dynamic_layers = generate_dynamic_plan(layers)
     logging.info("All plans are generated")
 
-    print_layer_state_table(naive_layers, static_layers, dynamic_layers, bench_dynamic_layers)
+    print_layer_state_table(naive_layers, static_layers, dynamic_layers)
 
     model_config = ModelConfig()
     model_config.model_name = model_name
