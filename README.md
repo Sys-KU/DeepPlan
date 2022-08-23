@@ -100,7 +100,7 @@ $ python3 plan.py -m resnet50 -p plans
 
 If you want to take a look at generated plans (Table 3 in the paper), you can click the following links.
 
-* [FIXME] Plans
+* [Plans](https://github.com/csl-ajou/DeepPlan/tree/main/plans/V100)
 
 
 ## 4. Run benchmarks
