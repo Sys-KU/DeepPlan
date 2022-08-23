@@ -135,6 +135,14 @@ model average inference time : 12.2287 ms
 ```
 
 ## 5. Run Experiments
+For experiments, we should have the model plans. To simplify creating model plans,
+we provide `create_all_plans.sh` shell script that make all model plans used in the experiments.
+
+```bash
+$ cd DeepPlan/scripts
+$ export PLAN_REPO="/<DeepPlan_PATH>/plans/V100"
+$ source create_all_plans.sh # the plan repository is created in PLAN_REPO path.
+```
 For all shell scripts, we should setup `PLAN_REPO` variable which represents plans repository.
 We provided experiments scripts for figure #10, #12, #13, and #14.
 Run the script in the `DeepPlan/scripts/fig#/run.sh` directory and the result will be logged in
@@ -151,6 +159,9 @@ $ source run.sh
 ```
 
 ### 5.2 Figure 12: 99% latency, goodput, and cold-start rate for BERT-Base (Synthetic workloads)
+We perform this experiment on a four-GPU server in an AWS instance.
+This experiment measures the 99% latency, goodput, and cold-start for BERT-Base
+while increasing the number of model instances concurrently running on the GPUs.
 
 ```bash
 $ cd DeepPlan/scripts/fig12
@@ -158,12 +169,19 @@ $ source run.sh
 ```
 
 ### 5.3 Figure 13: 99% latency for BERT-Large and GPT2 (Synthetic workloads)
+This experiment is similar to above the experiment (Figure 12) except that
+the evaluation model is changed from BERt-base to Bert-Large and GPT2.
 ```bash
 $ cd DeepPlan/scripts/fig13
 $ source run.sh
 ```
 
 ### 5.4 Figure 14: Performance of real-world trace (Real-world workloads)
+This experiment is also performed on a four-GPU server in an AWS instance.
+The above experiments (Figure 12, Figure 13) run with synthetic trace. But
+this experiment run with real-world trace derived from Microsoft Azure Funtions.
+In this experiment, we evaluate three workloads of three hours each (total 9 hours).
+
 To run this experiment, you should prepare auzre trace dataset.
 https://github.com/Azure/AzurePublicDataset/blob/master/AzureFunctionsDataset2019.md
 
