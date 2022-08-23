@@ -101,4 +101,10 @@ echo "Closing Server"
 
 wait
 
-eval "python3 graph.py $log_path fig12.pdf"
+is_installed=$(pip list | grep -F matplotlib)
+
+if [ -z "$is_installed" ]; then
+	echo "Matplotlib is not installed. So the graph can not be created."
+else
+	eval "python3 graph.py $log_path fig12.pdf"
+fi

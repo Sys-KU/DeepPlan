@@ -155,4 +155,10 @@ for model in "${model_names[@]}"; do
 	done
 done
 
-eval "python3 graph.py $log_path fig13.pdf"
+is_installed=$(pip list | grep -F matplotlib)
+
+if [ -z "$is_installed" ]; then
+	echo "Matplotlib is not installed. So the graph can not be created."
+else
+	eval "python3 graph.py $log_path fig13.pdf"
+fi

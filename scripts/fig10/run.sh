@@ -83,4 +83,10 @@ output_file="$_output"
 cp $tmp_file $output_file
 echo "Created '$output_file' log file"
 
-eval "python3 graph.py $output_file fig10.pdf"
+is_installed=$(pip list | grep -F matplotlib)
+
+if [ -z "$is_installed" ]; then
+	echo "Matplotlib is not installed. So the graph can not be created."
+else
+	eval "python3 graph.py $output_file fig10.pdf"
+fi

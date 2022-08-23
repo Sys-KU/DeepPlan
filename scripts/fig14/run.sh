@@ -95,4 +95,10 @@ output_file="$log_path/offered_load.csv"
 awk '$1 ~ /^[0-9]*,/ { print $2 }' $tmp_file > "$log_path/offered_load.csv"
 echo "Created '$output_file' log file"
 
-eval "python3 graph.py $log_path fig14.pdf"
+is_installed=$(pip list | grep -F matplotlib)
+
+if [ -z "$is_installed" ]; then
+	echo "Matplotlib is not installed. So the graph can not be created."
+else
+	eval "python3 graph.py $log_path fig14.pdf"
+fi
