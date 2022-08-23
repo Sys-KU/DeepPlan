@@ -18,7 +18,7 @@ script_path=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 build_path="$script_path/../../build"
 
 model_list="gpt2_384 bert_base bert_base bert_base bert_base roberta_base roberta_base roberta_base roberta_base"
-conc=216
+conc=252
 rate=150
 
 engines=("deepplan+" "deepplan" "pipeline")
@@ -45,7 +45,7 @@ for engine in "${engines[@]}"; do
 
 	echo "Start Experiment ($engine)"
 	client_cmd="$build_path/client -m $model_list -e $_engine -r $rate -c $conc -w azure -p $p_option"
-	$client_cmd | tee -a $tmp_file
+	stdbuf --output=L $client_cmd | tee -a $tmp_file
 
 	server_pid=$(ps -ef | grep -v grep | grep "$server_cmd" | awk '{print $2}')
 	kill -s SIGINT $server_pid
@@ -86,9 +86,13 @@ for engine in "${engines[@]}"; do
 
 	output_file="$log_path/${engine}.csv"
 
-	awk '$1 ~ /^[0-9]*,/ { print $0 }' $tmp_file > $output_file
+	awk '$1 ~ /^[0-9]*,/ { print $3 $4 $5 }' $tmp_file > $output_file
 
 	echo "Created '$output_file' log file"
 done
 
-#eval "python3 graph.py $log_path fig14.pdf"
+output_file="$log_path/offered_load.csv"
+awk '$1 ~ /^[0-9]*,/ { print $2 }' $tmp_file > "$log_path/offered_load.csv"
+echo "Created '$output_file' log file"
+
+eval "python3 graph.py $log_path fig14.pdf"

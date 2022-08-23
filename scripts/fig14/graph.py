@@ -36,10 +36,9 @@ def get_data(target):
 
         else:
             for i, line in enumerate(rdr):
-                line = line[0].split("\t")
                 latency = np.append(latency, float(line[0]))
-                goodput = np.append(goodput, float(line[1]))
-                cold = np.append(cold, float(line[2]))
+                cold = np.append(cold, float(line[1]))
+                goodput = np.append(goodput, float(line[2]))
 
             result.append(latency)
             result.append(goodput)
@@ -55,10 +54,9 @@ x_ticks = [30 * i for i in range(0, 7)]
 
 label_list = ["PipeSwitch", "DeepPlan (DHA)", "DeepPlan (PT+DHA)"]
 #color_list = ['#EAECEE', '#AEB6BF', '#85929E', '#5D6D7E', '#34495E', '#273746']
-csv_list = ["offeredload.csv", "lat.csv", "put.csv", "cold.csv"]
 
 # Prepare these files
-engine_list = ["pipeswitch.csv", "dha.csv", "dha_pt.csv"]
+engine_list = ["pipeline.csv", "deepplan.csv", "deepplan+.csv"]
 
 color_list = ['#AEB6BF', '#5D6D7E', '#273746']
 line_list = ['solid', 'dotted', 'dashdot']
@@ -89,7 +87,7 @@ for i in range(0, 4):
     li_ax.append(plt.subplot(gs[i]))
 
     if i == 0: # Offered Load graph
-        offered_load = get_data("various_offeredload.csv")
+        offered_load = get_data("offered_load.csv")
 
         li_ax[i].plot(x_value, offered_load, linewidth = LINE_WIDTH, color='#000000', linestyle="solid")
         li_ax[i].set_ylim(ylim_list[i])
@@ -119,7 +117,7 @@ for i, engine in enumerate(engine_list):
             if j < 3:
                 ax.axes.xaxis.set_ticklabels([])
 
-            ax.set_ylabel(y_label[j-1], fontsize=FONTSIZE_YLABEL)
+            ax.set_ylabel(y_label[j], fontsize=FONTSIZE_YLABEL)
             ax.get_yaxis().set_label_coords(-0.13, 0.5)
 
             ax.set_xlim(0, 180)

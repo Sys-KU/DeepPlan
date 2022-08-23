@@ -74,7 +74,7 @@ model_name="gpt2"
 min_conc=20
 max_conc=200
 step_conc=20
-rate=100
+rate=90
 
 for engine in "${engines[@]}"; do
 	p_option=1
