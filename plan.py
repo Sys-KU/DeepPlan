@@ -72,7 +72,7 @@ def print_layer_state_table(naive_layers, static_layers, dynamic_layers):
     boundary_lines = "=" * 78
     hyphens = "|{:<25}|{:<25}|{}".format('-'*25, '-'*25, '-'*25)
     print(boundary_lines)
-    print("|{:<25}|{:<25}|{}".format("Layer", "Load? (Static)", "Load? (Dynamic)"))
+    print("|{:<25}|{:<25}|{}".format("Layer", "Initial approach", "DeepPlan (DHA)"))
     print(hyphens)
     for i, layer in enumerate(naive_layers):
         layer_name = "{}-{}".format(layer['index'], layer['layer_type'])
