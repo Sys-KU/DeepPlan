@@ -1,18 +1,9 @@
 # DeepPlan
 
-An inference execution planner minimizes the performance penalty while provisioning DL models from host to GPU.
+Title: Fast and Efficient Model Serving Using Multi-GPUs with Direct-Host-Access
 
-## 1.System overview of DeepPlan
-As depicted above, DeepPlan takes a pre-trained model as an input and generates
-an execution plan that is utilized in the inference server.
-Steps 1 and 2 are integrated into a single Python module.
-We provide a tutorial for ResNet50 to generate an execution plan
-guided by DeepPlan in the [Generating Layer Execution Plan](#3-step-1--2-generating-layer-execution-plan) section.
-Step 3 is to execute the plan while provisioning the model from host to GPU. In [Model Execution](#4-step3-model-execution),
-we demonstrate how the generated plan is used for inference.
-
-## 2.Experiment Environment
-### 2.1 Hardware
+## 1.Experimental Environment
+### 1.1 Hardware
 * AWS P3.8xlarge instance
 * GPU: NVIDIA V100 (16GB) x 4ea
 * Memory: 244GB DDR4 DRAM
@@ -20,14 +11,23 @@ we demonstrate how the generated plan is used for inference.
 * NVLink 2.0
 * PCIe 3.0
 
-### 2.2 Sofware requirements
+For EuroSys '23 Artifact Evaluation Committee, we can provide the AWS instance we used if you don't have any machine that satisfies the requirements. Let us know through the HotCRP portal.
+
+### 1.2 Sofware requirements
 * Operating system: Ubuntu 18.04
 * CUDA v11.3
 * CuDNN v8.2.1
 * ProtoBuf v3.11.4 (https://github.com/protocolbuffers/protobuf)
+* PyTorch v1.9
+* Matplotlib (for generating graphs)
 
-### 2.3 (Requirement) Building PyTorch for DeepPlan
-To enable DeepPlan, the modified PyTorch (v1.9) framework is required. Let's download PyTorch v1.9.0 first.
+## 2. Build software components
+
+### 2.1 Dependent packages
+[FIXME] Jinwoo, let's add the installation steps for required packages.
+
+### 2.2 PyTorch
+To use DeepPlan, it is required to modify PyTorch (v1.9) framework. Let's download the PyTorch v1.9.0 package first.
 
 ```bash
 $ git clone --recursive https://github.com/pytorch/pytorch -b v1.9.0
@@ -51,7 +51,7 @@ In addition to PyTorch, install pip modules using the command below, from DeepPl
 $ pip3 install -r requirements.txt
 ```
 
-### 2.4 Build DeepPlan
+### 2.3 DeepPlan
 
 ```bash
 $ mkdir build
@@ -60,10 +60,10 @@ $ cmake -DCMAKE_PREFIX_PATH=/absolute/path/to/pytorch ..
 $ make
 ```
 
-## 3. Step 1 ~ 2: Generating Layer Execution Plan
+## 3. Setup execution plans
 
-You need to create a plan from our Planner. In this tutorial, our target is ResNet50.
-The `plan.py` Python module already imports the pre-trained model so that you can simply type the name of the model. 
+You need to create a plan for a given model. In this tutorial, our target is ResNet50.
+The python module, `plan.py`,  already imports the pre-trained models evaluated in the paper so that you can simply type the name of the model.
 ```bash
 # Create Plan
 $ cd <DeepPlan_PATH>
@@ -72,15 +72,15 @@ $ python3 plan.py -m resnet50 -p plans
 # The generated plan from this command is saved the plans directory
 ```
 
-If you want to take a look at plans generated, you can click the following links.
+If you want to take a look at generated plans (Table 3 in the paper), you can click the following links.
 
-* Plans
+* [FIXME] Plans
 
-DeepPlan coordinates layer load and execution timing based on the corresponding plan.
 
-## 4. Step3: Model Execution
-If you created the plan above, you can run the model inference for the ResNet50 model with DeepPlan engine through the commands below, from DeepPlan's `Home` directory.
-We provide four execution methods explained in our paper.
+## 4. Run benchmarks
+Once DeepPlan generate the execution plan for a given model, you can run the model inference with the DeepPlan engine through the commands below, from DeepPlan's `Home` directory.
+Here, we have an example for ResNet50. In this section, we describe how to run four different execution methods,
+Baseline (on-demand), PipeSwitch, DeepPlan (DHA), DeepPlan (PT), and DeepPlan (PT+DHA), explained in our paper.
 
 Before running the model inference, you have to set `PLAN_REPO` environment variable which represents where plans are stored.
 
@@ -89,29 +89,7 @@ Before running the model inference, you have to set `PLAN_REPO` environment vari
 export PLAN_REPO="/<DeepPlan_PATH>/plans"
 ```
 
-* DeepPlan (DHA)
-
-```bash
-$ ./build/benchmark -m resnet50 -e deepplan
-```
-You should see output similar to the following:
-```bash
-Benchmarking Inference renset50
-model average inference time : 11.2064 ms
-```
-
-* DeepPlan (DHA+PT)
-
-```bash
-$ ./build/benchmark -m resnet50 -e deepplan -d 0 2 # d option represents the devices to be used for load.
-```
-You should see output similar to the following:
-```bash
-Benchmarking Inference renset101
-model average inference time : 8.7267 ms
-```
-
-* On-Demand
+ * Baseline (on-demand)
 
 ```bash
 $ ./build/benchmark -m resnet50 -e demand
@@ -134,9 +112,35 @@ Benchmarking Inference resnet50
 model average inference time : 12.2287 ms
 ```
 
-## 5. Run Experiments
+* DeepPlan (DHA)
+
+```bash
+$ ./build/benchmark -m resnet50 -e deepplan
+```
+You should see output similar to the following:
+```bash
+Benchmarking Inference renset50
+model average inference time : 11.2064 ms
+```
+
+* DeepPlan (PT)
+
+[FIXME]
+
+* DeepPlan (DHA+PT)
+
+```bash
+$ ./build/benchmark -m resnet50 -e deepplan -d 0 2 # d option represents the devices to be used for load.
+```
+You should see output similar to the following:
+```bash
+Benchmarking Inference renset101
+model average inference time : 8.7267 ms
+```
+
+## 5. Reproduce results in the paper
 For experiments, we should have the model plans. To simplify creating model plans,
-we provide `create_all_plans.sh` shell script that make all model plans used in the experiments.
+we provide `create_all_plans.sh` shell script that makes all model plans used in the experiments.
 
 ```bash
 $ cd DeepPlan/scripts
@@ -198,4 +202,3 @@ $ export AZURE_TRACE_DIR="/<DeepPlan_PATH>/scripts/azure-functions"
 $ cd DeepPlan/scripts/fig14
 $ source run.sh
 ```
-
