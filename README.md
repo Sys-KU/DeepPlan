@@ -3,8 +3,6 @@
 An inference execution planner minimizes the performance penalty while provisioning DL models from host to GPU.
 
 ## 1.System overview of DeepPlan
-![System overview of DeepPlan](figs/arch-eps-converted-to.png)
-
 As depicted above, DeepPlan takes a pre-trained model as an input and generates
 an execution plan that is utilized in the inference server.
 Steps 1 and 2 are integrated into a single Python module.
@@ -32,33 +30,34 @@ we demonstrate how the generated plan is used for inference.
 To enable DeepPlan, the modified PyTorch (v1.9) framework is required. Let's download PyTorch v1.9.0 first.
 
 ```
-git clone --recursive https://github.com/pytorch/pytorch -b v1.9.0
-cd pytorch
+$ git clone --recursive https://github.com/pytorch/pytorch -b v1.9.0
+$ cd pytorch
 ```
 
 To simplify the step reflecting the changes on the framework, we have provided a patch file for DeepPlan.
 The following command applies the patch to the PyTorch v1.9.0
 ```
-patch -p1 < <DeepPlan_PATH>/pytorch.patch
+$ patch -p1 < <DeepPlan_PATH>/pytorch.patch
 ```
 
 After applying the patch file, let's compile the PyTorch.
+
 ```
-python3 setup install
+$ python3 setup install
 ```
 
 In addition to PyTorch, install pip modules using the command below, from DeepPlan's `Home` directory.
 ```
-pip3 install -r requirements.txt
+$ pip3 install -r requirements.txt
 ```
 
 ### 2.4 Build DeepPlan
 
-```
-mkdir build
-cd build
-cmake -DCMAKE_PREFIX_PATH=/absolute/path/to/pytorch ..
-make
+```bash
+$ mkdir build
+$ cd build
+$ cmake -DCMAKE_PREFIX_PATH=/absolute/path/to/pytorch ..
+$ make
 ```
 
 ## 3. Step 1 ~ 2: Generating Layer Execution Plan
@@ -67,8 +66,10 @@ You need to create a plan from our Planner. In this tutorial, our target is ResN
 The `plan.py` Python module already imports the pre-trained model so that you can simply type the name of the model. 
 ```bash
 # Create Plan
-python3 plan.py -m resnet50 -p <plans_repository>
-# The generated plan from this command is saved plans_repository
+$ cd <DeepPlan_PATH>
+$ mkdir -p plans
+$ python3 plan.py -m resnet50 -p plans
+# The generated plan from this command is saved the plans directory
 ```
 
 If you want to take a look at plans generated, you can click the following links.
@@ -79,12 +80,19 @@ DeepPlan coordinates layer load and execution timing based on the corresponding 
 
 ## 4. Step3: Model Execution
 If you created the plan above, you can run the model inference for the ResNet50 model with DeepPlan engine through the commands below, from DeepPlan's `Home` directory.
-We provide three execution methods explained in our paper.
+We provide four execution methods explained in our paper.
+
+Before running the model inference, you have to set `PLAN_REPO` environment variable which represents where plans are stored.
+
+```bash
+# The plan_repository should be the same as the path specified in above creating a plan
+export PLAN_REPO=/<DeepPlan_PATH>/plans
+```
 
 * DeepPlan (DHA)
 
 ```bash
-./build/benchmark -m resnet50 -e deepplan
+$ ./build/benchmark -m resnet50 -e deepplan
 ```
 You should see output similar to the following:
 ```
@@ -95,7 +103,7 @@ model average inference time : 11.2064 ms
 * DeepPlan (DHA+PT)
 
 ```bash
-./build/benchmark -m resnet50 -e deepplan -d 0 2 # d option represents the devices to be used for load.
+$ ./build/benchmark -m resnet50 -e deepplan -d 0 2 # d option represents the devices to be used for load.
 ```
 You should see output similar to the following:
 ```
@@ -106,7 +114,7 @@ model average inference time : 8.7267 ms
 * On-Demand
 
 ```bash
-./build/benchmark -m resnet50 -e demand
+$ ./build/benchmark -m resnet50 -e demand
 ```
 You should see output similar to the following:
 ```
@@ -117,7 +125,7 @@ model average inference time : 17.6628 ms
 * PipeSwtich (Bai et al. OSDI 2020)
 
 ```bash
-./build/benchmark -m resnet50 -e pipeline
+$ ./build/benchmark -m resnet50 -e pipeline
 ```
 
 You should see output similar to the following:
@@ -127,11 +135,34 @@ model average inference time : 12.2287 ms
 ```
 
 ## 5. Run Experiments
+For all shell scripts, we should setup `PLAN_REPO` variable which represents plans repository.
+We provided experiments scripts for figure #10, #12, #13, and #14.
+Run the script in the `DeepPlan/scripts/fig#/run.sh` directory and the result will be logged in
+the same directory. If the Matplotlib library was installed in you machine,
+the graph will be drawn in `fig#.pdf'.
 
 ### 5.1 Figure 10: Performance comparison of DeepPlan and previous studies
 
+```
+$ cd DeepPlan/scripts/fig10
+$ source run.sh
+```
+
 ### 5.2 Figure 12: 99% latency, goodput, and cold-start rate for BERT-Base (Synthetic workloads)
+```
+$ cd DeepPlan/scripts/fig12
+$ source run.sh
+```
 
 ### 5.3 Figure 13: 99% latency for BERT-Large and GPT2 (Synthetic workloads)
+```
+$ cd DeepPlan/scripts/fig13
+$ source run.sh
+```
 
 ### 5.4 Figure 14: Performance of real-world trace (Real-world workloads)
+```
+$ cd DeepPlan/scripts/fig14
+$ source run.sh
+```
+
