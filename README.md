@@ -17,14 +17,40 @@ For EuroSys '23 Artifact Evaluation Committee, we can provide the AWS instance w
 * Operating system: Ubuntu 18.04
 * CUDA v11.3
 * CuDNN v8.2.1
-* ProtoBuf v3.11.4 (https://github.com/protocolbuffers/protobuf)
+* ProtoBuf v3.11.4
 * PyTorch v1.9
 * Matplotlib (for generating graphs)
 
 ## 2. Build software components
 
 ### 2.1 Dependent packages
-[FIXME] Jinwoo, let's add the installation steps for required packages.
+* build-essential
+```bash
+$ sudo apt update
+$ sudo apt install build-essential
+```
+
+* CUDA Toolkit v11.3 & CuDNN v8.2.1
+
+DeepPlan works based on the pytorch DL framework.
+The CUDA Toolkit & CuDNN Library are required to build PyTorch.
+
+To install the CUDA Toolkit, see this following link.
+
+https://developer.nvidia.com/cuda-11.3.0-download-archive
+
+To install the CuDNN Library, see this following link.
+
+https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html
+
+* ProtoBuf v3.11.4
+
+DeepPlan use the ProtoBuf library to serialize or deserialize plans.
+So The ProtoBuf is required to build DeepPlan.
+
+To install the ProtoBuf, see this following link.
+
+https://github.com/protocolbuffers/protobuf/blob/main/src/README.md
 
 ### 2.2 PyTorch
 To use DeepPlan, it is required to modify PyTorch (v1.9) framework. Let's download the PyTorch v1.9.0 package first.
@@ -125,12 +151,14 @@ model average inference time : 11.2064 ms
 
 * DeepPlan (PT)
 
-[FIXME]
+```bash
+$ ./build/benchmark -m resnet50 -e pipeline -d 0 2 # d option represents the devices to be used for load
+```
 
 * DeepPlan (DHA+PT)
 
 ```bash
-$ ./build/benchmark -m resnet50 -e deepplan -d 0 2 # d option represents the devices to be used for load.
+$ ./build/benchmark -m resnet50 -e deepplan -d 0 2 # d option represents the devices to be used for load
 ```
 You should see output similar to the following:
 ```bash
