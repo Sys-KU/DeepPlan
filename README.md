@@ -29,25 +29,25 @@ we demonstrate how the generated plan is used for inference.
 ### 2.3 (Requirement) Building PyTorch for DeepPlan
 To enable DeepPlan, the modified PyTorch (v1.9) framework is required. Let's download PyTorch v1.9.0 first.
 
-```
+```bash
 $ git clone --recursive https://github.com/pytorch/pytorch -b v1.9.0
 $ cd pytorch
 ```
 
 To simplify the step reflecting the changes on the framework, we have provided a patch file for DeepPlan.
 The following command applies the patch to the PyTorch v1.9.0
-```
+```bash
 $ patch -p1 < <DeepPlan_PATH>/pytorch.patch
 ```
 
 After applying the patch file, let's compile the PyTorch.
 
-```
+```bash
 $ python3 setup install
 ```
 
 In addition to PyTorch, install pip modules using the command below, from DeepPlan's `Home` directory.
-```
+```bash
 $ pip3 install -r requirements.txt
 ```
 
@@ -85,8 +85,8 @@ We provide four execution methods explained in our paper.
 Before running the model inference, you have to set `PLAN_REPO` environment variable which represents where plans are stored.
 
 ```bash
-# The plan_repository should be the same as the path specified in above creating a plan
-export PLAN_REPO=/<DeepPlan_PATH>/plans
+# The plan repository should be the same as the path specified in above creating a plan
+export PLAN_REPO="/<DeepPlan_PATH>/plans"
 ```
 
 * DeepPlan (DHA)
@@ -95,7 +95,7 @@ export PLAN_REPO=/<DeepPlan_PATH>/plans
 $ ./build/benchmark -m resnet50 -e deepplan
 ```
 You should see output similar to the following:
-```
+```bash
 Benchmarking Inference renset50
 model average inference time : 11.2064 ms
 ```
@@ -106,7 +106,7 @@ model average inference time : 11.2064 ms
 $ ./build/benchmark -m resnet50 -e deepplan -d 0 2 # d option represents the devices to be used for load.
 ```
 You should see output similar to the following:
-```
+```bash
 Benchmarking Inference renset101
 model average inference time : 8.7267 ms
 ```
@@ -117,7 +117,7 @@ model average inference time : 8.7267 ms
 $ ./build/benchmark -m resnet50 -e demand
 ```
 You should see output similar to the following:
-```
+```bash
 Benchmarking Inference resnet50
 model average inference time : 17.6628 ms
 ```
@@ -129,7 +129,7 @@ $ ./build/benchmark -m resnet50 -e pipeline
 ```
 
 You should see output similar to the following:
-```
+```bash
 Benchmarking Inference resnet50
 model average inference time : 12.2287 ms
 ```
@@ -139,29 +139,44 @@ For all shell scripts, we should setup `PLAN_REPO` variable which represents pla
 We provided experiments scripts for figure #10, #12, #13, and #14.
 Run the script in the `DeepPlan/scripts/fig#/run.sh` directory and the result will be logged in
 the same directory. If the Matplotlib library was installed in you machine,
-the graph will be drawn in `fig#.pdf'.
+the graph will be drawn in `fig#.pdf`.
 
 ### 5.1 Figure 10: Performance comparison of DeepPlan and previous studies
+We evaluate the inference latency with a single batch for On-Demand, PipeSwitch, DeepPlan(DHA),
+DeepPlan (PT), and DeepPlan (PT+DHA). The results are normalized to On-Demand (Baseline).
 
-```
+```bash
 $ cd DeepPlan/scripts/fig10
 $ source run.sh
 ```
 
 ### 5.2 Figure 12: 99% latency, goodput, and cold-start rate for BERT-Base (Synthetic workloads)
-```
+
+```bash
 $ cd DeepPlan/scripts/fig12
 $ source run.sh
 ```
 
 ### 5.3 Figure 13: 99% latency for BERT-Large and GPT2 (Synthetic workloads)
-```
+```bash
 $ cd DeepPlan/scripts/fig13
 $ source run.sh
 ```
 
 ### 5.4 Figure 14: Performance of real-world trace (Real-world workloads)
+To run this experiment, you should prepare auzre trace dataset.
+https://github.com/Azure/AzurePublicDataset/blob/master/AzureFunctionsDataset2019.md
+
+The following command download the azure-trace dataset.
+```bash
+$ cd DeepPlan/scripts
+$ source download_azure_trace_dataset.sh
+
+# To recognize this trace file from client, The `AZURE_TRACE_DIR` variable should be set
+$ export AZURE_TRACE_DIR="/<DeepPlan_PATH>/scripts/azure-functions"
 ```
+
+```bash
 $ cd DeepPlan/scripts/fig14
 $ source run.sh
 ```
