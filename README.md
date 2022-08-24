@@ -118,7 +118,8 @@ Before running the model inference, you have to set `PLAN_REPO` environment vari
 
 ```bash
 # The plan repository should be the same as the path specified in above creating a plan
-export PLAN_REPO=$DEEPPLAN_HOME/plans
+$ export PLAN_REPO=$DEEPPLAN_HOME/plans
+$ cd $DEEPPLA_HOME
 ```
 
  * Baseline (on-demand)
