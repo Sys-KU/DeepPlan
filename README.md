@@ -35,11 +35,9 @@ $ sudo apt install build-essential
 DeepPlan works with the PyTorch DL framework. To run PyTorch,
 we are supposed to install the dependent packages, CUDA and CuDNN.
 
-To install the CUDA Toolkit, see this following link:
-https://developer.nvidia.com/cuda-11.3.0-download-archive
+To install the CUDA Toolkit, see this link: [Download Installer for Linux Ubuntu 18.04 x86_64](https://developer.nvidia.com/cuda-11.3.0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=18.04&target_type=deb_local)
 
-To install the CuDNN Library, see this following link:
-https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html
+To install the CuDNN Library, see this link: [Installation Guide](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html) and [CuDNN Archive](https://developer.nvidia.com/rdp/cudnn-archive)
 
 * ProtoBuf v3.11.4
 
