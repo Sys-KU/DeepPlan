@@ -105,8 +105,8 @@ The python module, `plan.py`,  already imports the pre-trained models evaluated 
 ```bash
 # Create Plan
 $ cd $DEEPPLAN_HOME
-$ mkdir -p plans
-$ python3 plan.py -m resnet50 -p plans
+$ mkdir -p plan_repo
+$ python3 plan.py -m resnet50 -p plan_repo
 # The generated plan from this command is saved the plans directory
 ```
 
@@ -124,7 +124,7 @@ Before running the model inference, you have to set `PLAN_REPO` environment vari
 
 ```bash
 # The plan repository should be the same as the path specified in above creating a plan
-$ export PLAN_REPO=$DEEPPLAN_HOME/plans
+$ export PLAN_REPO=$DEEPPLAN_HOME/plan_repo
 $ cd $DEEPPLA_HOME
 ```
 
@@ -185,7 +185,8 @@ we provide `create_all_plans.sh` shell script that makes all model plans used in
 
 ```bash
 $ cd $DEEPPLAN_HOME/scripts
-$ export PLAN_REPO=$DEEPPLAN_HOME/plans/V100
+$ mkdir -p $DEEPPLAN_HOME/plan_repo/V100
+$ export PLAN_REPO=$DEEPPLAN_HOME/plan_repo/V100
 $ source create_all_plans.sh # the plan repository is created in PLAN_REPO path.
 ```
 For all shell scripts, we should setup `PLAN_REPO` variable which represents plans repository.
