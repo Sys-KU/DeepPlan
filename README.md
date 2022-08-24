@@ -45,6 +45,14 @@ DeepPlan uses the ProtoBuf library to serialize or deserialize plans.
 So, ProtoBuf is required to build DeepPlan. To install ProtoBuf, see this
 following link: https://github.com/protocolbuffers/protobuf/blob/main/src/README.md
 
+* Matplotlib
+
+This is an optional package for generating graph files.
+
+```bash
+$ pip3 install matplotlib
+```
+
 ### 2.2 PyTorch
 To use DeepPlan, it is required to modify PyTorch (v1.9) framework.
 To simplify the step reflecting the code changes on the framework, we have provided a patch file for DeepPlan.
