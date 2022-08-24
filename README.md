@@ -18,8 +18,10 @@ For EuroSys '23 Artifact Evaluation Committee, we can provide the AWS instance w
 * CUDA v11.3
 * CuDNN v8.2.1
 * ProtoBuf v3.11.4
+* Boost v1.65
+* TBB (Threading Building-Blocks) [v2017_U7](https://github.com/oneapi-src/oneTBB/tree/2017_U7)
 * PyTorch v1.9
-* Matplotlib (for generating graphs)
+* Matplotlib v3.3.4 (for generating graphs)
 
 ## 2. Build software components
 
@@ -28,6 +30,11 @@ For EuroSys '23 Artifact Evaluation Committee, we can provide the AWS instance w
 ```bash
 $ sudo apt update
 $ sudo apt install build-essential
+```
+
+* C++ Library on Ubuntu
+```
+$ sudo apt-get install libtbb-dev libboost1.65-all-dev
 ```
 
 * CUDA Toolkit v11.3 & CuDNN v8.2.1
@@ -44,14 +51,6 @@ To install the CuDNN Library, see this link: [Installation Guide](https://docs.n
 DeepPlan uses the ProtoBuf library to serialize or deserialize plans.
 So, ProtoBuf is required to build DeepPlan. To install ProtoBuf, see this
 following link: https://github.com/protocolbuffers/protobuf/blob/main/src/README.md
-
-* Matplotlib
-
-This is an optional package for generating graph files.
-
-```bash
-$ pip3 install matplotlib
-```
 
 ### 2.2 PyTorch
 To use DeepPlan, it is required to modify PyTorch (v1.9) framework.
@@ -125,7 +124,7 @@ Before running the model inference, you have to set `PLAN_REPO` environment vari
 ```bash
 # The plan repository should be the same as the path specified in above creating a plan
 $ export PLAN_REPO=$DEEPPLAN_HOME/plan_repo
-$ cd $DEEPPLA_HOME
+$ cd $DEEPPLAN_HOME
 ```
 
  * Baseline (on-demand)
@@ -192,7 +191,7 @@ $ source create_all_plans.sh # the plan repository is created in PLAN_REPO path.
 For all shell scripts, we should setup `PLAN_REPO` variable which represents plans repository.
 We provided experiments scripts for figure #10, #12, #13, and #14.
 Run the script in the `$DEEPPLAN_HOME/scripts/fig#/run.sh` directory and the result will be logged in
-the same directory. If the Matplotlib library was installed in you machine,
+the same directory. If the Matplotlib library was installed in your machine,
 the graph will be drawn in `fig#.pdf`.
 
 ### 5.1 Figure 10: Performance comparison of DeepPlan and previous studies
