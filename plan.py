@@ -8,6 +8,7 @@ import numpy as np
 import argparse
 import logging
 import copy
+import time
 from collections import OrderedDict
 from typing import Tuple
 from proto.deepplan_pb2 import ModelConfig, Plan, ModelInput, DataType
@@ -354,7 +355,12 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
     layers = []
     if (os.path.isfile(profile_info_path) is False) or (do_profile is True):
         logging.info("Dumping profile info")
+
+        t1 = time.time()
         layers = dump_profile_info(model, x, profile_info_path)
+        t2 = time.time()
+
+        logging.info(f"Measurement time for profiling: {(t2-t1)*1e3:.3f} ms")
         logging.info("Dump completed")
     else:
         logging.info("Load profile info")
@@ -364,11 +370,14 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
     logging.info("Creating plans")
     naive_layers = generate_naive_layers(layers)
     static_layers = generate_static_plan(layers)
-    dynamic_layers = generate_dynamic_plan(layers)
 
+    t1 = time.time()
+    dynamic_layers = generate_dynamic_plan(layers)
+    t2 = time.time()
     logging.info("All plans are generated")
 
     print_layer_state_table(naive_layers, static_layers, dynamic_layers)
+    logging.info(f"Plan Generating Time: {(t2-t1)*1e3:.3f} ms")
 
     model_config = ModelConfig()
     model_config.model_name = model_name
@@ -415,7 +424,9 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
             model.cuda(d)
             x = x.cuda(d)
             logging.info("Creating trace module")
+
             trace_module = generate_trace_module(model, x)
+
             logging.info("trace module is created")
             logging.info(f"Saving trace module to 'model{d}.pt'")
             torch.jit.save(trace_module, trace_module_path)
