@@ -135,7 +135,7 @@ $ ./build/benchmark -m resnet50 -e demand
 You should see output similar to the following:
 ```bash
 Benchmarking Inference resnet50
-model average inference time : 17.6628 ms
+Average Latency : 17.7038 ms
 ```
 
 * PipeSwtich (Bai et al. OSDI 2020)
@@ -147,7 +147,7 @@ $ ./build/benchmark -m resnet50 -e pipeline
 You should see output similar to the following:
 ```bash
 Benchmarking Inference resnet50
-model average inference time : 12.2287 ms
+Average Latency : 11.981 ms
 ```
 
 * DeepPlan (DHA)
@@ -158,13 +158,18 @@ $ ./build/benchmark -m resnet50 -e deepplan
 You should see output similar to the following:
 ```bash
 Benchmarking Inference renset50
-model average inference time : 11.2064 ms
+Average Latency : 11.2345 ms
 ```
 
 * DeepPlan (PT)
 
 ```bash
 $ ./build/benchmark -m resnet50 -e pipeline -d 0 2 # d option represents the devices to be used for load
+```
+You should see output similar to the following:
+```bash
+Benchmarking Inference renset50
+Average Latency : 9.39064 ms
 ```
 
 * DeepPlan (DHA+PT)
@@ -175,7 +180,7 @@ $ ./build/benchmark -m resnet50 -e deepplan -d 0 2 # d option represents the dev
 You should see output similar to the following:
 ```bash
 Benchmarking Inference renset101
-model average inference time : 8.7267 ms
+Average Latency : 8.36423 ms
 ```
 
 ## 5. Reproduce results in the paper
