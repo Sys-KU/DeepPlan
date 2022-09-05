@@ -68,3 +68,5 @@ target_link_libraries(client
 	${Boost_LIBRARIES}
 	${TORCH_LIBRARIES}
 )
+
+add_subdirectory(experiments)
