@@ -17,12 +17,18 @@ struct BenchmarkOptions {
   EngineType engine_type;
   std::vector<int> devices;
   int batch_size;
+  bool no_pipeline_trans;
+  bool measure_load;
   int num_warmup;
   int num_test;
 };
 
+static int no_pipeline_trans_flag = 0;
+static int measure_load_flag = 0;
 static struct option long_options[] =
 {
+  {"no_pipeline_trans", no_argument,    &no_pipeline_trans_flag,  1},
+  {"measure_load",      no_argument,    &measure_load_flag, 1},
   {"help",    no_argument,       0, 'h' },
   {"model",   required_argument, 0, 'm' },
   {"engine",  required_argument, 0, 'e' },
@@ -35,7 +41,7 @@ static void print_usage(char* program_name) {
   fprintf(stderr,
       "Usage : %s [-h] --model/-m MODEL_NAME [--device/-d DEVICES [DEVICES ...]]\n"
       "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan}]\n"
-      "\t\t[--batch/-b BATCH_SIZE",
+      "\t\t[--batch/-b BATCH_SIZE] [--no_pipeline_trans]",
       program_name);
 }
 
@@ -54,10 +60,20 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
   options->engine_type = EngineType::IN_MEMORY;
   options->devices     = std::vector<int>(1, 0); // = [0]
 
-  while ((flag = getopt_long(argc, argv, "b:d:e:hm:", long_options, NULL)) != -1) { 
+  int option_index;
+  while ((flag = getopt_long(argc, argv, "b:d:e:hm:", long_options, &option_index)) != -1) { 
     switch (flag) {
+      case 0:
+        if (long_options[option_index].flag != 0)
+          break;
+        std::cout << "option " << long_options[option_index].name;
+        if (optarg)
+          std::cout << " with arg " << optarg;
+        std::cout << "\n";
+        break;
       case 'h':
         print_usage(argv[0]);
+        exit(EXIT_FAILURE);
         break;
       case 'm':
         options->model_name = std::string(optarg);
@@ -103,6 +119,9 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
         bool found = false;
     }
   }
+
+  options->no_pipeline_trans = (no_pipeline_trans_flag == 1 ? true : false);
+  options->measure_load = (measure_load_flag == 1 ? true : false);
 }
 
 void benchmark(BenchmarkOptions* options) {
@@ -139,9 +158,16 @@ void benchmark(BenchmarkOptions* options) {
       torch::cuda::synchronize(target_device.index());
     }
 
-    auto outputs = model->forward(inputs);
+    if (options->measure_load) {
+      model->load();
+    }
+    else {
+      auto outputs = model->forward(inputs);
+    }
 
-    torch::cuda::synchronize(target_device.index());
+    for (auto device : options->devices) {
+      torch::cuda::synchronize(device);
+    }
     t2 = util::now();
 
     if (options->engine_type != IN_MEMORY) {
@@ -154,7 +180,17 @@ void benchmark(BenchmarkOptions* options) {
   }
 
   double avg_latency = total_ms / num_test;
-  std::cout << "Average Latency : " << avg_latency << " ms\n";
+  if (options->measure_load) {
+    std::cout << "Average Load Time : " << avg_latency << " ms\n";
+
+    avg_latency /= 1e3; // convert time order from milliseconds to seconds;
+    double model_size = model->model_size / 1e9f; // GB
+    std::cout << "Average Bandwidth : " << model_size / avg_latency << " GB/s\n";
+
+  }
+  else {
+    std::cout << "Average Latency : " << avg_latency << " ms\n";
+  }
 
   return;
 }
@@ -165,7 +201,7 @@ int main(int argc, char** argv) {
 
   std::cout << "Benchmarking Inference " << benchmark_options->model_name << "\n";
 
-  deepplan::Init();
+  deepplan::Init(!benchmark_options->no_pipeline_trans);
 
   benchmark(benchmark_options);
 

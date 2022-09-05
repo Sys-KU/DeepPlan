@@ -3,6 +3,7 @@
 #include <util.h>
 
 #include <cassert>
+#include <future>
 #include <cuda_runtime_api.h>
 #include <c10/cuda/CUDAStream.h>
 #include <c10/cuda/CUDAGuard.h>
@@ -32,6 +33,12 @@ class LoadThread {
     Task(std::vector<ScriptModule> modules, int device)
       : type(Type::request),
         modules(modules),
+        device(device),
+        cb(cb) {};
+
+    Task(std::function<void(void)> cb, int device)
+      : type(Type::dummy),
+        cb(cb),
         device(device) {};
 
     Task()
@@ -39,16 +46,28 @@ class LoadThread {
 
     enum class Type {
       request = 0,
+      dummy,
       end
     } type;
 
     std::vector<ScriptModule> modules;
+    std::function<void(void)> cb;
     int device;
   };
 
   void transfer_modules(std::vector<ScriptModule>& modules, int target_device) {
     if (!modules.empty())
       queue.push(std::make_shared<Task>(modules, target_device));
+  }
+
+  void transfer_module(ScriptModule module, int target_device) {
+    std::vector<ScriptModule> modules;
+    modules.push_back(std::move(module));
+    queue.push(std::make_shared<Task>(modules, target_device));
+  }
+
+  void transfer_dummy(std::function<void(void)> cb, int target_device) {
+    queue.push(std::make_shared<Task>(cb, target_device));
   }
 
   virtual void init() = 0;
@@ -91,26 +110,27 @@ class NVLinkThread : public LoadThread {
       if (task->type == Task::Type::end) {
         break;
       }
-      at::Device target_device(at::kCUDA, task->device);
+      else if (task->type == Task::Type::request) {
+        at::Device target_device(at::kCUDA, task->device);
 
-      for (auto& module : task->modules) {
-        module.synchronize(device);
-        module.to_and_record(target_device, true);
+        for (auto& module : task->modules) {
+          module.synchronize(device);
+          module.to_and_record(target_device, true);
+        }
+      }
+      else {
+        task->cb();
       }
     }
   }
 
-  void transfer_modules(ScriptModule module, int target_device) {
-    std::vector<ScriptModule> modules;
-    modules.push_back(std::move(module));
-    queue.push(std::make_shared<Task>(modules, target_device));
-  }
 };
 
 class PCIeThread : public LoadThread {
  public:
-  PCIeThread(int device)
-   : LoadThread(device) { init(); };
+  PCIeThread(int device, bool pipeline_transmission)
+   : pipeline_transmission(pipeline_transmission),
+     LoadThread(device) { init(); };
 
   void init() {
     thr = std::thread(std::bind(&PCIeThread::Loop, this));
@@ -128,21 +148,37 @@ class PCIeThread : public LoadThread {
       if (task->type == Task::Type::end) {
         break;
       }
+      else if (task->type == Task::Type::request) {
+        int target_device = task->device;
+        bool use_pt = target_device != device_;
 
-      int target_device = task->device;
+        for (auto& module : task->modules) {
+          module.to_and_record(device, true);
 
-      for (auto& module : task->modules) {
-        module.to_and_record(device, true);
-
-        if (target_device != device_) {
-          g_nvlink_thrs[device_]->transfer_modules(module, target_device);
+          if (use_pt) {
+            if (pipeline_transmission)
+              g_nvlink_thrs[device_]->transfer_module(module, target_device);
+          }
         }
+        if (use_pt) {
+          if (!pipeline_transmission)
+            g_nvlink_thrs[device_]->transfer_modules(task->modules, target_device);
+        }
+      }
+      else {
+        bool use_pt = task->device != device_;
+        if (use_pt)
+          g_nvlink_thrs[device_]->transfer_dummy(task->cb, task->device);
+        else
+          task->cb();
       }
     }
   }
+
+  bool pipeline_transmission;
 };
 
-void Init(void) {
+void Init(bool pipeline_transmission) {
   n_device = torch::cuda::device_count();
   torch::jit::getBailoutDepth() = 0;
 
@@ -150,7 +186,7 @@ void Init(void) {
   g_nvlink_thrs.resize(n_device);
 
   for (int i = 0; i < n_device; i++) {
-    g_pcie_thrs[i] = new PCIeThread(i);
+    g_pcie_thrs[i] = new PCIeThread(i, pipeline_transmission);
     g_nvlink_thrs[i] = new NVLinkThread(i);
     g_exec_streams.push_back(std::move(c10::cuda::getStreamFromPool(false, i)));
   }
@@ -193,6 +229,39 @@ class PipelineEngine : public Engine {
 
     return outputs;
   }
+
+  void load(Model* model) {
+    int target_device = model->target_device.index();
+
+    assert(n_device > target_device);
+
+    if (!model->is_cuda) {
+      auto promises =
+        std::vector<std::promise<cudaEvent_t>>(model->devices.size());
+      for (int i = 0; i < model->devices.size(); i++) {
+        int device = model->devices[i];
+        auto cb = [this, &promises, i]() {
+          cudaEvent_t event;
+          cudaEventCreate(&event);
+          cudaEventRecord(event, c10::cuda::getCurrentCUDAStream());
+          promises[i].set_value(event);
+        };
+
+        std::vector<ScriptModule> modules;
+        for (auto idx : model->device_map[device]) {
+          modules.push_back(model->layers[idx]);
+        }
+        g_pcie_thrs[device]->transfer_modules(modules, target_device);
+        g_pcie_thrs[device]->transfer_dummy(cb, target_device);
+      }
+
+      for (int i = 0; i < model->devices.size(); i++) {
+        auto event = promises[i].get_future().get();
+      }
+    }
+
+    model->is_cuda = true;
+  }
 };
 
 static PipelineEngine engine;
@@ -202,6 +271,11 @@ torch::jit::IValue RunEngine(Model* model, ScriptModuleInput& x) {
   auto outputs = engine.run(model, x);
 
   return outputs;
+}
+
+void Load(Model* model) {
+  c10::cuda::CUDAGuard device_guard(model->target_device);
+  engine.load(model);
 }
 
 }

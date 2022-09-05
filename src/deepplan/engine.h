@@ -13,7 +13,9 @@ class Engine {
 
 torch::jit::IValue RunEngine(Model* model, ScriptModuleInput& x);
 
-void Init(void);
+void Load(Model* model);
+
+void Init(bool pipeline_transmission=true);
 
 void Deinit(void);
 

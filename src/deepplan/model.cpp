@@ -161,6 +161,10 @@ torch::jit::IValue Model::forward(ScriptModuleInput& x) {
   return outputs;
 }
 
+void Model::load() {
+  Load(this);
+}
+
 void Model::to(at::Device device, bool non_blocking) {
   model.to(device, non_blocking);
   if (device.is_cuda())

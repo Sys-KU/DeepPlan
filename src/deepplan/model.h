@@ -17,6 +17,8 @@ class Model {
 
 	torch::jit::IValue forward(ScriptModuleInput& x);
 
+  void load();
+
   void to(at::Device device, bool non_blocking = false);
 
   void clear();
