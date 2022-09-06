@@ -125,11 +125,12 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
 }
 
 void benchmark(BenchmarkOptions* options) {
-  double t1, t2, total_ms = 0;
+  double t1, t2, total_ms = 0, total_load_ms = 0;
   int num_warmup = options->num_warmup;
   int num_test   = options->num_test;
   int batch_size  = options->batch_size;
   at::Device target_device(at::kCUDA, options->devices[0]);
+  int n_devices = options->devices.size();
 
   torch::NoGradGuard no_grad;
 
@@ -151,7 +152,10 @@ void benchmark(BenchmarkOptions* options) {
     model->to(target_device);
 
   for (int step = 0; step < num_warmup+num_test; step++) {
-    t1 = util::now();
+    std::vector<std::array<double, 2>> events(n_devices);
+    for (int i = n_devices-1; i >= 0; i--) {
+      events[i][0] = util::now();
+    }
 
     if (options->engine_type == ON_DEMAND) {
       model->to(target_device, true);
@@ -159,23 +163,32 @@ void benchmark(BenchmarkOptions* options) {
     }
 
     if (options->measure_load) {
+
       model->load();
+
     }
     else {
       auto outputs = model->forward(inputs);
     }
 
-    for (auto device : options->devices) {
+    for (int i = n_devices-1; i >= 0; i--) {
+      int device = options->devices[i];
       torch::cuda::synchronize(device);
+      events[i][1] = util::now();
     }
-    t2 = util::now();
 
     if (options->engine_type != IN_MEMORY) {
       model->clear();
     }
 
     if (step >= num_warmup) {
-      total_ms += ((t2-t1) / 1e6);
+      auto target_event = events[0];
+      total_ms += ((target_event[1]-target_event[0]) / 1e6);
+      if (options->measure_load) {
+        for (int i = 0; i < n_devices; i++) {
+          total_load_ms += ((events[i][1] - events[i][0]) / 1e6);
+        }
+      }
     }
   }
 
@@ -183,11 +196,11 @@ void benchmark(BenchmarkOptions* options) {
   if (options->measure_load) {
     std::cout << "Average Load Time : " << avg_latency << " ms\n";
 
-    avg_latency /= 1e3; // convert time order from milliseconds to seconds;
-    double model_size = model->model_size / 1e9f; // GB
-    int n_devices = options->devices.size();
-    std::cout << "Average Bandwidth : " << model_size / avg_latency / n_devices << " GB/s\n";
+    // Convert time order from milliseconds to seconds;
+    double avg_load_time = (total_load_ms / num_test) / 1e3;
 
+    double model_size = model->model_size / 1e9f; // GB
+    std::cout << "Average Bandwidth : " << model_size / avg_load_time << " GB/s\n";
   }
   else {
     std::cout << "Average Latency : " << avg_latency << " ms\n";
