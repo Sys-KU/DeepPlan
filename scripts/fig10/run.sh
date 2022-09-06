@@ -20,7 +20,7 @@ engines=("pipeline" "deepplan")
 batch_size=1
 
 tmp_file="/tmp/deepplan_fig10"
-echo "" > $tmp_file
+printf "" > $tmp_file
 
 for model in "${models[@]}"; do
 	# Baseline
@@ -48,7 +48,7 @@ for model in "${models[@]}"; do
 		done
 	done
 
-	printf "" >> $tmp_file
+	echo "" >> $tmp_file
 done
 
 log_path="$script_path/logs"
