@@ -41,7 +41,7 @@ static void print_usage(char* program_name) {
   fprintf(stderr,
       "Usage : %s [-h] --model/-m MODEL_NAME [--device/-d DEVICES [DEVICES ...]]\n"
       "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan}]\n"
-      "\t\t[--batch/-b BATCH_SIZE] [--no_pipeline_trans]",
+      "\t\t[--batch/-b BATCH_SIZE] [--no_pipeline_trans] [--measure_load]",
       program_name);
 }
 
@@ -185,7 +185,8 @@ void benchmark(BenchmarkOptions* options) {
 
     avg_latency /= 1e3; // convert time order from milliseconds to seconds;
     double model_size = model->model_size / 1e9f; // GB
-    std::cout << "Average Bandwidth : " << model_size / avg_latency << " GB/s\n";
+    int n_devices = options->devices.size();
+    std::cout << "Average Bandwidth : " << model_size / avg_latency / n_devices << " GB/s\n";
 
   }
   else {
