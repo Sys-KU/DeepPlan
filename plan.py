@@ -13,25 +13,6 @@ from collections import OrderedDict
 from typing import Tuple
 from proto.deepplan_pb2 import ModelConfig, Plan, ModelInput, DataType
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
-
-parser = argparse.ArgumentParser(description='DeepPlan Planner')
-parser.add_argument('--model_name', '-m', type=str, required=True)
-parser.add_argument('--batch_size', '-b', type=int, default=1)
-parser.add_argument('--plan_dir', '-p', type=str, required=True)
-parser.add_argument('--profile', action='store_true', required=False)
-parser.add_argument('--trace', action='store_true', required=False)
-
-args = parser.parse_args()
-
-num_test = 100
-num_warmup = 10
-
 class MeasureRecorder():
     def __init__(self):
         self.events = OrderedDict()
@@ -92,14 +73,14 @@ def print_layer_state_table(naive_layers, static_layers, dynamic_layers):
                                                )),
     print(boundary_lines)
 
-def measure_load_layers(model):
+def measure_load_layers(model, n_warmup, n_test):
     measure_rec = MeasureRecorder()
 
     load_times_list = []
     load_times = []
 
     layers = util.travel_layers(model)
-    for step in range(num_warmup+num_test):
+    for step in range(n_warmup+n_test):
         for layer in layers:
             layer.cpu()
             layer.pin_memory()
@@ -111,17 +92,17 @@ def measure_load_layers(model):
             measure_rec.record_end(layer.__qualname__)
 
         torch.cuda.synchronize()
-        if step >= num_warmup:
+        if step >= n_warmup:
             load_times_list.append(measure_rec.result())
         measure_rec.reset()
 
     load_times_list = np.array(load_times_list)
     load_times = load_times_list.sum(axis=0)
-    load_times = load_times / num_test
+    load_times = load_times / n_test
 
     return load_times
 
-def measure_exec_layers(model, x):
+def measure_exec_layers(model, x, n_warmup, n_test):
     measure_rec = MeasureRecorder()
 
     exec_times_list = []
@@ -141,7 +122,7 @@ def measure_exec_layers(model, x):
             handle = layer.register_forward_hook(record_end)
             hooks.append((pre_handle, handle))
 
-    for step in range(num_warmup+num_test):
+    for step in range(n_warmup+n_test):
         with torch.no_grad():
             if type(x) is dict:
                 model.forward(**x)
@@ -150,7 +131,7 @@ def measure_exec_layers(model, x):
 
         torch.cuda.synchronize()
 
-        if step >= num_warmup:
+        if step >= n_warmup:
             exec_times = measure_rec.result()
             exec_times_list.append(exec_times)
         measure_rec.reset()
@@ -161,23 +142,23 @@ def measure_exec_layers(model, x):
 
     exec_times_list = np.array(exec_times_list)
     exec_times = exec_times_list.sum(axis=0)
-    exec_times = exec_times/num_test
+    exec_times = exec_times/n_test
 
     return exec_times
 
-def dump_profile_info(model, x, file_name):
+def dump_profile_info(model, x, n_warmup, n_test, file_name):
     # Measure Load Time
     _layers = util.travel_layers(model)
-    layer_load_times = measure_load_layers(model)
+    layer_load_times = measure_load_layers(model, n_warmup, n_test)
 
     # Measure GPU in-memory Exec time
     model.cuda()
-    layer_cuda_exec_times = measure_exec_layers(model, x)
+    layer_cuda_exec_times = measure_exec_layers(model, x, n_warmup, n_test)
 
     # Measure GPU Direct Access Exec Time
     model.cpu()
     model.cuda_host()
-    layer_cuda_host_exec_times = measure_exec_layers(model, x)
+    layer_cuda_host_exec_times = measure_exec_layers(model, x, n_warmup, n_test)
 
     # Measure GPU Direct Access Exec Time with benchmark
 
@@ -344,20 +325,20 @@ def generate_trace_module(model, x):
     trace_module = torch.jit.trace(model, x)
     return trace_module
 
-def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
+def generate_plan(model, x, output_dir_path, n_warmup, n_test, do_profile=False, do_trace=False):
     if not os.path.isdir(output_dir_path):
         os.makedirs(output_dir_path)
 
     profile_info_path = os.path.join(
                             output_dir_path,
-                            f'model_batch_{batch_size}.pickle'
+                            f'model_b{batch_size}_i{n_test}.pickle'
                         )
     layers = []
     if (os.path.isfile(profile_info_path) is False) or (do_profile is True):
         logging.info("Dumping profile info")
 
         t1 = time.time()
-        layers = dump_profile_info(model, x, profile_info_path)
+        layers = dump_profile_info(model, x, n_warmup, n_test, profile_info_path)
         t2 = time.time()
 
         logging.info(f"Measurement time for profiling: {(t2-t1)*1e3:.3f} ms")
@@ -377,7 +358,9 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
     logging.info("All plans are generated")
 
     print_layer_state_table(naive_layers, static_layers, dynamic_layers)
+    dha_layers_cnt = sum(layer['exec_type'] == 1 for layer in dynamic_layers)
     logging.info(f"Plan Generating Time: {(t2-t1)*1e3:.3f} ms")
+    print(f"DHA Layers Count: {dha_layers_cnt}")
 
     model_config = ModelConfig()
     model_config.model_name = model_name
@@ -434,6 +417,26 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
 
 
 if __name__ == "__main__":
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(message)s')
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger.addHandler(stream_handler)
+
+    parser = argparse.ArgumentParser(description='DeepPlan Planner')
+    parser.add_argument('--model_name', '-m', type=str, required=True)
+    parser.add_argument('--batch_size', '-b', type=int, default=1)
+    parser.add_argument('--plan_dir', '-p', type=str, required=True)
+    parser.add_argument('--profile', action='store_true', required=False)
+    parser.add_argument('--trace', action='store_true', required=False)
+    parser.add_argument('--n_test', type=int, default=100)
+    parser.add_argument('--n_warmup', type=int, default=10)
+
+    args = parser.parse_args()
+
+    n_test = args.n_test
+    n_warmup = args.n_warmup
     model_name = args.model_name
     batch_size = args.batch_size
     plan_dir   = args.plan_dir
@@ -449,4 +452,4 @@ if __name__ == "__main__":
     input_data = models.import_data(model_name, batch_size)
     input_data = input_data.cuda()
 
-    generate_plan(model, input_data, output_dir_path, do_profile, do_trace)
+    generate_plan(model, input_data, output_dir_path, n_test, n_warmup, do_profile, do_trace)
