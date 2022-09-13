@@ -21,6 +21,7 @@ struct PCMPCIeOptions {
   int out_features;
   std::vector<int64_t> input_sizes;
   int kernel_size;
+  int padding_size;
 };
 
 static struct option long_options[] =
@@ -31,6 +32,7 @@ static struct option long_options[] =
   {"out_features",  required_argument,  0,  'o' },
   {"input_sizes",   required_argument,  0,  's' },
   {"kernel_size",   required_argument,  0,  'k' },
+  {"padding_size",  required_argument,  0,  'p' },
   {0, 0, 0, 0}
 };
 
@@ -41,7 +43,8 @@ static void print_usage(char* program_name) {
   fprintf(stderr,
       "Usage : %s [-h] --layer_type/-t {emb, linear, conv}\n"
       "\t\t--in_features/-i IN_FEATURES --out_features/-o OUT_FEATURES\n"
-      "\t\t--input_sizes/-s INPUT_SIZES [--kernel_size/-k KERNEL_SIZE]\n",
+      "\t\t--input_sizes/-s INPUT_SIZES [--kernel_size/-k KERNEL_SIZE]\n"
+      "\t\t[--padding_size/-p PADDING_SIZE]",
       program_name);
   exit(EXIT_FAILURE);
 }
@@ -60,8 +63,9 @@ void parseOptions(PCMPCIeOptions** pcm_pcie_options, int argc, char** argv) {
   found_input = false;
 
   options->kernel_size = 1;
+  options->padding_size = 0;
 
-  while ((flag = getopt_long(argc, argv, "hi:k:o:s:t:", long_options, NULL)) != -1) {
+  while ((flag = getopt_long(argc, argv, "hi:k:o:p:s:t:", long_options, NULL)) != -1) {
     switch (flag) {
       case 'h':
         print_usage(argv[0]);
@@ -76,6 +80,9 @@ void parseOptions(PCMPCIeOptions** pcm_pcie_options, int argc, char** argv) {
       case 'o':
         found_out = true;
         options->out_features = (int)strtol(optarg, NULL, 10);
+        break;
+      case 'p':
+        options->padding_size = (int)strtol(optarg, NULL, 10);
         break;
       case 's':
         found_input = true;
@@ -163,6 +170,10 @@ struct Conv2d : torch::nn::Module {
               )
           )) {};
 
+  Conv2d(torch::nn::Conv2dOptions options)
+    : conv2d(register_module("conv2d",
+              torch::nn::Conv2d(options))) {};
+
   torch::Tensor forward(torch::Tensor x) {
     return conv2d(x);
   }
@@ -175,6 +186,7 @@ torch::nn::Module* getLayer(PCMPCIeOptions* options) {
   int in_features = options->in_features;
   int out_features = options->out_features;
   int kernel_size = options->kernel_size;
+  int padding_size = options->padding_size;
 
   torch::nn::Module* layer;
 
@@ -186,7 +198,10 @@ torch::nn::Module* getLayer(PCMPCIeOptions* options) {
       layer = new Linear(in_features, out_features);
       break;
     case CONV:
-      layer = new Conv2d(in_features, out_features, kernel_size);
+      layer = new Conv2d(
+                torch::nn::Conv2dOptions(in_features, out_features, kernel_size)
+                  .padding(padding_size)
+                  .bias(false));
       break;
   }
 

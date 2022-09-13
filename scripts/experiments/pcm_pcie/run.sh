@@ -12,7 +12,7 @@ build_path="$script_path/../../../build"
 args_list=(
 						"-t linear -i 768 -o 768 -s 384 768"
 						"-t linear -i 768 -o 3072 -s 384 768"
-						"-t conv -i 64 -o 64 -k 1 -s 64 56 56"
+						"-t conv -i 64 -o 64 -k 3 -p 1-s 1 -s 64 56 56"
 						"-t conv -i 256 -o 256 -k 3 -s 256 14 14"
 						"-t conv -i 512 -o 512 -k 3 -s 512 7 7"
 						"-t emb -i 2 -o 768 -s 384"
@@ -34,8 +34,8 @@ for args in "${args_list[@]}"; do
 	load_rdcur=$(echo "$output" | awk '{if (NR == 1) { print $NF }}')
 	dha_rdcur=$(echo "$output" | awk '{if (NR == 2) { print $NF }}')
 	load_time=$(echo "$output" | awk '{if (NR == 3) { print $(NF-1) }}')
-	exec_time=$(echo "$output" | awk '{if (NR == 3) { print $(NF-1) }}')
-	dha_time=$(echo "$output" | awk '{if (NR == 3) { print $(NF-1) }}')
+	exec_time=$(echo "$output" | awk '{if (NR == 4) { print $(NF-1) }}')
+	dha_time=$(echo "$output" | awk '{if (NR == 5) { print $(NF-1) }}')
 
 	echo "$load_rdcur, $dha_rdcur, $load_time, $exec_time, $dha_time" >> $output_file
 done

@@ -115,6 +115,8 @@ class NVLinkThread : public LoadThread {
 
         for (auto& module : task->modules) {
           module.synchronize(device);
+        }
+        for (auto& module : task->modules) {
           module.to_and_record(target_device, true);
         }
       }
