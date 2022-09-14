@@ -149,16 +149,26 @@ def measure_exec_layers(model, x, n_warmup, n_test):
 def dump_profile_info(model, x, n_warmup, n_test, file_name):
     # Measure Load Time
     _layers = util.travel_layers(model)
+
+    model.pin_memory()
+    load_t1 = time.time()
     layer_load_times = measure_load_layers(model, n_warmup, n_test)
+    load_t2 = time.time()
+
 
     # Measure GPU in-memory Exec time
     model.cuda()
+    exec_t1 = time.time()
     layer_cuda_exec_times = measure_exec_layers(model, x, n_warmup, n_test)
+    exec_t2 = time.time()
 
     # Measure GPU Direct Access Exec Time
     model.cpu()
     model.cuda_host()
+
+    exec_dha_t1 = time.time()
     layer_cuda_host_exec_times = measure_exec_layers(model, x, n_warmup, n_test)
+    exec_dha_t2 = time.time()
 
     # Measure GPU Direct Access Exec Time with benchmark
 
@@ -184,6 +194,18 @@ def dump_profile_info(model, x, n_warmup, n_test, file_name):
                      }
 
         layer_info_list.append(layer_info)
+
+    load_time = load_t2 - load_t1
+    exec_time = exec_t2 - exec_t1
+    exec_dha_time = exec_dha_t2 - exec_dha_t1
+    total_time = load_time + exec_time + exec_dha_time
+
+    print("=====Profiling Time=====")
+    print(f"Load Time: {load_time:.2f} s")
+    print(f"In-Memory Exec Time: {exec_time:.2f} s")
+    print(f"DHA Exec Time: {exec_dha_time:.2f} s")
+    print(f"Total Time: {total_time:.2f} s")
+    print("========================")
 
     with open(file_name, 'wb') as f:
         pickle.dump(layer_info_list, f)
@@ -341,7 +363,6 @@ def generate_plan(model, x, output_dir_path, n_warmup, n_test, do_profile=False,
         layers = dump_profile_info(model, x, n_warmup, n_test, profile_info_path)
         t2 = time.time()
 
-        logging.info(f"Measurement time for profiling: {(t2-t1)*1e3:.3f} ms")
         logging.info("Dump completed")
     else:
         logging.info("Load profile info")
@@ -359,8 +380,8 @@ def generate_plan(model, x, output_dir_path, n_warmup, n_test, do_profile=False,
 
     print_layer_state_table(naive_layers, static_layers, dynamic_layers)
     dha_layers_cnt = sum(layer['exec_type'] == 1 for layer in dynamic_layers)
-    logging.info(f"Plan Generating Time: {(t2-t1)*1e3:.3f} ms")
     print(f"DHA Layers Count: {dha_layers_cnt}")
+    print(f"Plan Generating Time: {(t2-t1)*1e3:.3f} ms")
 
     model_config = ModelConfig()
     model_config.model_name = model_name
@@ -401,7 +422,8 @@ def generate_plan(model, x, output_dir_path, n_warmup, n_test, do_profile=False,
     util.write_to_pbtxt(model_config, os.path.join(output_dir_path, 'config.pbtxt'))
     logging.info("Model config is created")
 
-    for d in range(torch.cuda.device_count()):
+    #for d in range(torch.cuda.device_count()):
+    for d in range(1):
         trace_module_path = os.path.join(output_dir_path, f'model{d}.pt')
         if (os.path.isfile(trace_module_path) is False) or (do_trace is True):
             model.cuda(d)
