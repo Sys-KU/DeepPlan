@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_C_STANDARD 11)
 
-project(DeepCache)
+project(DeepPlan)
 
 find_package(Torch REQUIRED)
 find_package(Boost COMPONENTS system filesystem REQUIRED)

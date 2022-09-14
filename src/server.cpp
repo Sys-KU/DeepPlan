@@ -14,8 +14,6 @@ void sig_to_exception(int s)
 }
 
 int main(int argc, char** argv) {
-  std::string model_repo = "/home/jinu/DeepCache/plans/A5000";
-
   {
     // setupt handling interrupt
     struct sigaction sigIntHandler;
