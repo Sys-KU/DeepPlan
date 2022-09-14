@@ -26,11 +26,13 @@ parser.add_argument('--batch_size', '-b', type=int, default=1)
 parser.add_argument('--plan_dir', '-p', type=str, required=True)
 parser.add_argument('--profile', action='store_true', required=False)
 parser.add_argument('--trace', action='store_true', required=False)
+parser.add_argument('--n_test', type=int, default=10)
+parser.add_argument('--n_warmup', type=int, default=10)
 
 args = parser.parse_args()
 
-num_test = 100
-num_warmup = 10
+num_test = args.n_test
+num_warmup = args.n_warmup
 
 class MeasureRecorder():
     def __init__(self):
