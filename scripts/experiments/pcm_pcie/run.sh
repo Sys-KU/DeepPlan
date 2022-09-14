@@ -3,7 +3,7 @@
 if [[ $UID != 0 ]]; then
 	echo "Please run this script with sudo:"
 	echo "sudo $0 $*"
-	exit 1
+	return
 fi
 
 script_path=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )

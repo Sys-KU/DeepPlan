@@ -355,6 +355,7 @@ def generate_plan(model, x, output_dir_path, n_warmup, n_test, do_profile=False,
                             output_dir_path,
                             f'model_b{batch_size}_i{n_test}.pickle'
                         )
+    print(profile_info_path)
     layers = []
     if (os.path.isfile(profile_info_path) is False) or (do_profile is True):
         logging.info("Dumping profile info")
@@ -380,7 +381,7 @@ def generate_plan(model, x, output_dir_path, n_warmup, n_test, do_profile=False,
 
     print_layer_state_table(naive_layers, static_layers, dynamic_layers)
     dha_layers_cnt = sum(layer['exec_type'] == 1 for layer in dynamic_layers)
-    print(f"DHA Layers Count: {dha_layers_cnt}")
+    print(f"DHA-Layers Count: {dha_layers_cnt}")
     print(f"Plan Generating Time: {(t2-t1)*1e3:.3f} ms")
 
     model_config = ModelConfig()
@@ -452,7 +453,7 @@ if __name__ == "__main__":
     parser.add_argument('--plan_dir', '-p', type=str, required=True)
     parser.add_argument('--profile', action='store_true', required=False)
     parser.add_argument('--trace', action='store_true', required=False)
-    parser.add_argument('--n_test', type=int, default=100)
+    parser.add_argument('--n_test', type=int, default=10)
     parser.add_argument('--n_warmup', type=int, default=10)
 
     args = parser.parse_args()
@@ -474,4 +475,4 @@ if __name__ == "__main__":
     input_data = models.import_data(model_name, batch_size)
     input_data = input_data.cuda()
 
-    generate_plan(model, input_data, output_dir_path, n_test, n_warmup, do_profile, do_trace)
+    generate_plan(model, input_data, output_dir_path, n_warmup, n_test, do_profile, do_trace)

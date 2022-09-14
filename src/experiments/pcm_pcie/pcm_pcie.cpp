@@ -285,7 +285,7 @@ double measureTime(std::function<void(void)> func, std::function<void(void)> res
     reset();
 
     if (i >= n_warmup)
-      total = (t2-t1);
+      total += (t2-t1);
   }
 
   return (total / n_test / 1e6);
@@ -316,7 +316,20 @@ int main(int argc, char** argv) {
       conv2d->forward(x);
     }
   };
-  auto load_reset = [&layer]() { layer->to(at::kCPU); };
+  auto load_reset = [&layer]() {
+    layer->to(at::kCPU);
+    layer->apply([](torch::nn::Module& module) {
+      // Then move every parameter to the new dtype/device.
+      for (auto& parameter : module.named_parameters(/*recurse=*/false)) {
+        parameter->set_data(torch::autograd::Variable(*parameter).pin_memory());
+      }
+      // Then move every buffer to the new dtype/device.
+      for (auto& buffer : module.named_buffers(/*recurse=*/false)) {
+        buffer->set_data(torch::autograd::Variable(*buffer).pin_memory());
+      }
+    });
+  };
+
   auto dummy_reset = []() {};
 
   auto numLoadRdCur = measurePCMPCIe(m, load_func, load_reset);
