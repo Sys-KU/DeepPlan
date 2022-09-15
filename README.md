@@ -74,7 +74,7 @@ $ patch -p1 < $DEEPPLAN_HOME/pytorch.patch
 After applying the patch file, let's compile the PyTorch.
 
 ```bash
-$ python3 setup install
+$ python3 setup.py install
 ```
 
 In addition to PyTorch, install pip modules using the command below, from DeepPlan's `Home` directory.
