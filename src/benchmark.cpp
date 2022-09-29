@@ -107,6 +107,8 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
 
 void benchmark(BenchmarkOptions* options) {
   double t1, t2, total_ms = 0;
+  std::vector<double> latencies;
+
   int num_warmup = options->num_warmup;
   int num_test   = options->num_test;
   int batch_size  = options->batch_size;
@@ -149,12 +151,18 @@ void benchmark(BenchmarkOptions* options) {
     }
 
     if (step >= num_warmup) {
-      total_ms += ((t2-t1) / 1e6);
+      latencies.push_back((t2-t1) / 1e6);
     }
   }
 
+  std::sort(latencies.begin(), latencies.end());
+
+  total_ms = std::accumulate(latencies.begin(), latencies.end(), 0.f);
   double avg_latency = total_ms / num_test;
+
   std::cout << "Average Latency : " << avg_latency << " ms\n";
+  std::cout << "Min Latency : " << latencies.front() << " ms\n";
+  std::cout << "Max Latency : " << latencies.back() << " ms\n";
 
   return;
 }

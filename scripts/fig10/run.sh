@@ -19,8 +19,13 @@ models=("resnet50" "resnet101" "bert_base" "bert_large" "roberta_base" "roberta_
 engines=("pipeline" "deepplan")
 batch_size=1
 
-tmp_file="/tmp/deepplan_fig10"
-printf "" > $tmp_file
+tmp_avg_file="/tmp/deepplan_fig10_avg"
+tmp_min_file="/tmp/deepplan_fig10_min"
+tmp_max_file="/tmp/deepplan_fig10_max"
+
+printf "" > $tmp_avg_file
+printf "" > $tmp_min_file
+printf "" > $tmp_max_file
 
 for model in "${models[@]}"; do
 	# Baseline
@@ -31,8 +36,13 @@ for model in "${models[@]}"; do
 	echo "$output"
 	echo ""
 
-	latency=$(echo "$output" | awk '{if ($2 == "Latency") { print $(NF-1)}}')
-	printf "$latency, " >> $tmp_file
+	avg_lat=$(echo "$output" | awk '{if ($1 == "Average") { print $(NF-1)}}')
+	min_lat=$(echo "$output" | awk '{if ($1 == "Min") { print $(NF-1)}}')
+	max_lat=$(echo "$output" | awk '{if ($1 == "Max") { print $(NF-1)}}')
+
+	printf "$avg_lat, " >> $tmp_avg_file
+	printf "$min_lat, " >> $tmp_min_file
+	printf "$max_lat, " >> $tmp_max_file
 
 	for device_map in "${device_maps[@]}"; do
 		for engine in "${engines[@]}"; do
@@ -43,12 +53,20 @@ for model in "${models[@]}"; do
 			echo "$output"
 			echo ""
 
-			latency=$(echo "$output" | awk '{if ($2 == "Latency") { print $(NF-1)}}')
-			printf "$latency, " >> $tmp_file
+			avg_lat=$(echo "$output" | awk '{if ($1 == "Average") { print $(NF-1)}}')
+			min_lat=$(echo "$output" | awk '{if ($1 == "Min") { print $(NF-1)}}')
+			max_lat=$(echo "$output" | awk '{if ($1 == "Max") { print $(NF-1)}}')
+
+			printf "$avg_lat, " >> $tmp_avg_file
+			printf "$min_lat, " >> $tmp_min_file
+			printf "$max_lat, " >> $tmp_max_file
 		done
 	done
 
-	echo "" >> $tmp_file
+	echo "" >> $tmp_avg_file
+	echo "" >> $tmp_min_file
+	echo "" >> $tmp_max_file
+
 done
 
 log_path="$script_path/logs"
@@ -66,27 +84,36 @@ if [ ! -d "$log_path" ]; then
 	mkdir -p "$log_path"
 fi
 
-output_file="$log_path/report"
+output_path="$log_path/report"
 
 version=0
 while true; do
-	_output="${output_file}$version.csv"
-	if [ -f "$_output" ]; then
+	_output="${output_path}$version"
+	if [ -d "$_output" ]; then
 		((version++))
 	else
 		break
 	fi
 done
 
-output_file="$_output"
+output_path="$_output"
 
-cp $tmp_file $output_file
-echo "Created '$output_file' log file"
+mkdir -p $output_path
+
+avg_file="$output_path/result_avg.csv"
+min_file="$output_path/result_min.csv"
+max_file="$output_path/result_max.csv"
+
+cp $tmp_avg_file $avg_file
+cp $tmp_min_file $min_file
+cp $tmp_max_file $max_file
+
+echo "Created log files in '$output_path'"
 
 is_installed=$(pip list | grep -F matplotlib)
 
 if [ -z "$is_installed" ]; then
 	echo "Matplotlib is not installed. So the graph can not be created."
 else
-	eval "python3 graph.py $output_file fig10.pdf"
+	eval "python3 graph.py $avg_file $min_file $max_file fig10.pdf"
 fi
