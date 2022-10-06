@@ -4,6 +4,7 @@ set(DEEPPLAN_SRC
 		util.cpp
 		deepplan/model.cpp
 		deepplan/engine.cpp
+		libtorch/model.cpp
 )
 
 set(NETWORK_SRC

@@ -114,10 +114,18 @@ void benchmark(BenchmarkOptions* options) {
   int batch_size  = options->batch_size;
   at::Device target_device(at::kCUDA, options->devices[0]);
 
+  auto model_repo = std::getenv("PLAN_REPO");
+  if (model_repo == nullptr) {
+    std::cerr << "PLAN_REPO variable not set, exiting\n";
+    exit(EXIT_FAILURE);
+  }
+  std::string model_path = std::string(model_repo) + "/" + options->model_name;
+
   torch::NoGradGuard no_grad;
 
   deepplan::Model* model = new deepplan::Model(
                                             options->model_name,
+                                            model_path,
                                             options->engine_type,
                                             options->devices);
 

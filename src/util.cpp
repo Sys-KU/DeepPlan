@@ -195,4 +195,32 @@ void InputGenerator::generate_input(std::string model_name, int batch_size, std:
   *out = inputs;
 }
 
+bool exists_dir(const char* path) {
+  struct stat info;
+
+  if (stat(path, &info) != 0)
+    return false;
+  else if (info.st_mode & S_IFDIR)
+    return true;
+  else
+    return false;
+}
+
+std::vector<ScriptModule> travel_layers(ScriptModule module, std::string name) {
+  std::vector<ScriptModule> traveled_layers;
+
+  if (module.children().size() == 0) {
+    traveled_layers.push_back(module);
+    return traveled_layers;
+  }
+  else {
+    for (auto name_child : module.named_children()) {
+      if (name_child.name.find("drop") != std::string::npos) continue;
+      auto layers = travel_layers(name_child.value, name_child.name);
+      traveled_layers.insert(traveled_layers.end(), layers.begin(), layers.end());
+    }
+    return traveled_layers;
+  }
+}
+
 }

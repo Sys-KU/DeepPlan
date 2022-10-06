@@ -9,6 +9,9 @@
 #include <google/protobuf/text_format.h>
 #include <exception>
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
 typedef std::vector<torch::jit::IValue> ScriptModuleInput;
 typedef torch::jit::script::Module ScriptModule;
 
@@ -97,5 +100,9 @@ class InputGenerator {
 
   const char* model_repo_;
 };
+
+bool exists_dir(const char* path);
+
+std::vector<ScriptModule> travel_layers(ScriptModule module, std::string name="");
 
 } // namespace util

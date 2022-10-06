@@ -8,81 +8,16 @@
 
 namespace deepplan {
 
-static std::vector<ScriptModule> travel_layers(ScriptModule module, std::string name="") {
-  std::vector<ScriptModule> traveled_layers;
-
-  if (module.children().size() == 0) {
-    traveled_layers.push_back(module);
-    return traveled_layers;
-  }
-  else {
-    for (auto name_child : module.named_children()) {
-      if (name_child.name.find("drop") != std::string::npos) continue;
-      auto layers = travel_layers(name_child.value, name_child.name);
-      traveled_layers.insert(traveled_layers.end(), layers.begin(), layers.end());
-    }
-    return traveled_layers;
-  }
-}
-
-Model::Model(const std::string name, const EngineType type, const std::vector<int> devices)
-  : model_name(name),
-    engine_type(type) {
-      if (!devices.empty()) {
-        this->devices = devices;
-      }
-      this->target_device = at::Device(at::kCUDA, this->devices[0]);
+Model::Model(const std::string name, const std::string model_path, const EngineType type, const std::vector<int> devices)
+  : engine_type(type),
+    libtorch::Model(name, model_path, devices[0]) {
       init();
     }
 
 void Model::init() {
-  auto model_repo = std::getenv("PLAN_REPO");
-
-  if (model_repo == nullptr) {
-    std::cerr << "PLAN_REPO variable not set, exiting\n";
-    exit(EXIT_FAILURE);
-  }
-
-  std::string model_prefix;
-  std::string script_name;
-  std::string script_path;
-  std::string config_path;
-
-  model_prefix = std::string(model_repo) + "/" + model_name;
-  {
-    std::ostringstream ss;
-    ss << "model" << int(target_device.index()) << ".pt";
-    script_name = ss.str();
-  }
-  script_path = model_prefix + "/" + script_name;
-  config_path = model_prefix + "/config.pbtxt";
-
-  try {
-    this->model = torch::jit::load(script_path);
-    if (!util::read_from_pbtxt(this->model_config, config_path)) {
-      std::stringstream msg;
-      msg << "Failed to read " << config_path;
-      throw std::runtime_error(msg.str());
-    }
-    for (auto io : model_config.inputs()) {
-      this->input_configs.emplace_back(io);
-    }
-  }
-  catch (const c10::Error& e) {
-    std::cerr << "Error loading the model\n";
-    throw e;
-  }
-  catch (const std::exception& e) {
-    std::cerr << e.what() << "\n";
-    throw e;
-  }
-
-  this->layers = travel_layers(this->model);
-  this->n_layers = this->layers.size();
-  this->model.eval();
-  this->model.to(at::kCPU);
   {
     c10::cuda::CUDAGuard device_guard(this->target_device);
+    this->model.to(at::kCPU);
     this->model.cuda_host();
   }
 

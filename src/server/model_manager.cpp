@@ -3,7 +3,14 @@
 #include <deepplan/model.h>
 
 void ModelManager::add_model(std::string model_name, std::vector<int> devices) {
-  deepplan::Model* model = new deepplan::Model(model_name, engine_type, devices);
+  auto model_repo = std::getenv("PLAN_REPO");
+  if (model_repo == nullptr) {
+    std::cerr << "PLAN_REPO variable not set, exiting\n";
+    exit(EXIT_FAILURE);
+  }
+  std::string model_path = std::string(model_repo) + "/" + model_name;
+
+  deepplan::Model* model = new deepplan::Model(model_name, model_path, engine_type, devices);
 
   models.push_back(std::move(model));
 }

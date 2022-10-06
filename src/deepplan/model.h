@@ -5,13 +5,13 @@
 #include <unordered_map>
 #include <deepplan.pb.h>
 
+#include <libtorch/model.h>
+
 namespace deepplan {
 
-class Model {
+class Model : public libtorch::Model {
  public:
-  Model(const std::string name, const EngineType type, const std::vector<int> devices);
-
-  Model() {};
+  Model(const std::string name, const std::string model_path, const EngineType type, const std::vector<int> devices);
 
   void init();
 
@@ -21,31 +21,13 @@ class Model {
 
   void clear();
 
-  std::string model_name;
-
   EngineType engine_type;
 
   std::vector<int> devices = {0};
 
-  at::Device target_device = at::kCUDA;
-
-  ScriptModule model;
-
-  size_t model_size;
-
-  std::vector<ScriptModule> layers;
-
   std::unordered_map<int, std::vector<int>> device_map;
 
-  int n_layers;
-
   std::vector<int> load_layer_idxs;
-
-  std::atomic<bool> is_cuda;
-
-  ModelConfig model_config;
-
-  std::vector<InputConfig> input_configs;
 };
 
 }
