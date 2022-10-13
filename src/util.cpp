@@ -41,12 +41,13 @@ InputGenerator::InputGenerator()
 void InputGenerator::extend_rdata(DataType data_type, size_t size) {
   auto it = rdata_map.find(data_type);
   auto& data = it->second;
-  char rdata[ALIGN(size)];
+  size_t aligned_size = ALIGN(size);
+  char rdata[aligned_size];
 
   switch (data_type) {
     case TYPE_FP32:
       {
-        for (int i = 0; i < size; i += sizeof(float)) {
+        for (int i = 0; i < aligned_size; i += sizeof(float)) {
           float value = (float)rand() / RAND_MAX;
           memcpy(rdata+i, &value, sizeof(float));
         }
@@ -54,7 +55,7 @@ void InputGenerator::extend_rdata(DataType data_type, size_t size) {
       }
     case TYPE_INT64:
       {
-        for (int i = 0; i < size; i += sizeof(int64_t)) {
+        for (int i = 0; i < aligned_size; i += sizeof(int64_t)) {
           int64_t value = (int64_t)rand() % 30522;
           memcpy(rdata+i, &value, sizeof(int64_t));
         }
@@ -65,7 +66,7 @@ void InputGenerator::extend_rdata(DataType data_type, size_t size) {
       break;
   }
 
-  data.insert(data.begin(), rdata, rdata+sizeof(rdata));
+  data.insert(data.end(), rdata, rdata+sizeof(rdata));
 }
 
 void InputGenerator::generate_rdata(size_t size, DataType data_type, char** buf_ptr) {
@@ -82,8 +83,11 @@ void InputGenerator::generate_rdata(size_t size, DataType data_type, char* buf) 
   }
 
   if (it->second.size() < size) {
-    size_t extend_size = std::max((size_t)STEP_SIZE, size);
-    extend_rdata(data_type, extend_size);
+    int remained_size = size;
+    while (remained_size >= 0) {
+      extend_rdata(data_type, STEP_SIZE);
+      remained_size -= STEP_SIZE;
+    }
   }
 
   rdata = it->second;

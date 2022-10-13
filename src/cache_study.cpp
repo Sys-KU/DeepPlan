@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <stack>
 #include <unistd.h>
 #include <getopt.h>
 #include <torch/script.h>
@@ -53,6 +54,9 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
       case 'm':
         options->model_name = std::string(optarg);
         break;
+      case 'b':
+        options->batch_size = strtoul(optarg, NULL, 10);
+        break;
       default:
         print_usage(argv[0]);
         exit(EXIT_FAILURE);
@@ -61,6 +65,16 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
     }
   }
 }
+
+struct InferResult {
+  InferResult(double latency, size_t load_size, int n_caches)
+    : latency(latency),
+      load_size(load_size),
+      n_caches(n_caches) {};
+  double latency;
+  size_t load_size;
+  int n_caches;
+};
 
 void benchmark(BenchmarkOptions* options) {
   int num_warmup = options->num_warmup;
@@ -94,8 +108,9 @@ void benchmark(BenchmarkOptions* options) {
   }
 
   double t1, t2, total_ms, avg_latency;
+  std::stack<InferResult> results;
   size_t load_size;
-  std::cout << "Number of cached layers, Latency (ms), Load Size (MB)\n";
+  //std::cout << "Number of cached layers, Latency (ms), Load Size (MB)\n";
   for (int i = 0; i <= model->n_layers; i++) {
     total_ms = 0;
 
@@ -120,11 +135,32 @@ void benchmark(BenchmarkOptions* options) {
     }
 
     avg_latency = total_ms / num_test;
+    results.emplace(avg_latency, load_size, i);
 
-    std::cout << i << ", " << avg_latency << ", "
-              << load_size / 1024.f / 1024.f << "\n";
+    //std::cout << i << ", " << avg_latency << ", "
+    //          << load_size / 1024.f / 1024.f << "\n";
   }
 
+  double inmemory_lat = results.top().latency;
+  double threshold = inmemory_lat * 1.1;
+
+  InferResult opt_point = results.top();
+  while (!results.empty()) {
+    auto ret = results.top();
+    if (threshold < ret.latency) {
+      break;
+    }
+    opt_point = ret;
+    results.pop();
+  }
+
+  std::cout << "Result\n";
+  std::cout << "Total Number of Layers : " << model->n_layers << "\n";
+  std::cout << "Total Model Size : " << model->model_size/1024.f/1024.f << " MB\n";
+  std::cout << "In-Memory Inference Time : " << inmemory_lat << " ms\n";
+  std::cout << "Optimal Point Number of Cached layers : " << opt_point.n_caches << "\n";
+  std::cout << "Optimal Point Load Size : " << opt_point.load_size/1024.f/1024.f << " MB\n";
+  std::cout << "Optimal Point Inference Time : " << opt_point.latency << " ms\n";
   return;
 }
 
@@ -132,7 +168,8 @@ int main(int argc, char** argv) {
   BenchmarkOptions* benchmark_options;
   parseOptions(&benchmark_options, argc, argv);
 
-  std::cout << "Caching Study " << benchmark_options->model_name << "\n";
+  std::cout << "Caching Study " << benchmark_options->model_name << " "
+            << benchmark_options->batch_size << "-Batch\n";
 
   deepcache::Init();
 
