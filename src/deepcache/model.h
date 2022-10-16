@@ -27,7 +27,7 @@ class Model : public libtorch::Model {
 
    void reclaim_layers(int n_layers);
 
-   void load_layers(int n_layers);
+   void load_layers(int n_layers, bool non_blocking = false);
 
    std::vector<int> get_host_layers();
 

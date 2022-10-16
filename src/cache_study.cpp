@@ -15,6 +15,7 @@
 
 struct BenchmarkOptions {
   std::string model_name;
+  bool verbose;
   int batch_size;
   int num_warmup;
   int num_test;
@@ -22,6 +23,7 @@ struct BenchmarkOptions {
 
 static struct option long_options[] =
 {
+  {"verbose", no_argument,       0, 'v' },
   {"help",    no_argument,       0, 'h' },
   {"model",   required_argument, 0, 'm' },
   {"batch",   required_argument, 0, 'b' },
@@ -31,7 +33,7 @@ static struct option long_options[] =
 static void print_usage(char* program_name) {
   fprintf(stderr,
       "Usage : %s [-h] --model/-m MODEL_NAME\n"
-      "\t\t[--batch/-b BATCH_SIZE\n",
+      "\t\t[--batch/-b BATCH_SIZE] [--verbose/-v]\n",
       program_name);
 }
 
@@ -45,8 +47,9 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
   options->num_warmup  = 20;
   options->num_test    = 30;
   options->batch_size  = 1;
+  options->verbose     = false;
 
-  while ((flag = getopt_long(argc, argv, "b:hm:", long_options, NULL)) != -1) { 
+  while ((flag = getopt_long(argc, argv, "b:hm:v:", long_options, NULL)) != -1) { 
     switch (flag) {
       case 'h':
         print_usage(argv[0]);
@@ -56,6 +59,9 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
         break;
       case 'b':
         options->batch_size = strtoul(optarg, NULL, 10);
+        break;
+      case 'v':
+        options->verbose = true;
         break;
       default:
         print_usage(argv[0]);
@@ -80,6 +86,8 @@ void benchmark(BenchmarkOptions* options) {
   int num_warmup = options->num_warmup;
   int num_test   = options->num_test;
   int batch_size  = options->batch_size;
+  bool verbose_flag = options->verbose;
+
   at::Device target_device(at::kCUDA, 0);
 
   auto model_repo = std::getenv("PLAN_REPO");
@@ -107,12 +115,17 @@ void benchmark(BenchmarkOptions* options) {
     input = input.toTensor().to(model->target_device);
   }
 
-  double t1, t2, total_ms, avg_latency;
+  double t1, t2, total_infer_ms, avg_infer_ms, total_load_ms, avg_load_ms;
   std::stack<InferResult> results;
   size_t load_size;
-  //std::cout << "Number of cached layers, Latency (ms), Load Size (MB)\n";
+
+  if (verbose_flag) {
+    std::cout << "Number of cached layers, Load Size (MB), Inference Latency (ms), Load Latency (ms)\n";
+  }
+
   for (int i = 0; i <= model->n_layers; i++) {
-    total_ms = 0;
+    total_infer_ms = 0;
+    total_load_ms = 0;
 
     for (int step = 0; step < num_warmup+num_test; step++) {
       model->load_layers(i);
@@ -128,17 +141,36 @@ void benchmark(BenchmarkOptions* options) {
       t2 = util::now();
 
       if (step >= num_warmup) {
-        total_ms += ((t2-t1) / 1e6);
+        total_infer_ms += ((t2-t1) / 1e6);
+      }
+
+      if (verbose_flag) {
+        model->clear();
+        model->load_layers(i);
+
+        t1 = util::now();
+        model->load_layers(model->n_layers-i, true);
+
+        torch::cuda::synchronize(target_device.index());
+        t2 = util::now();
+
+        if (step >= num_warmup) {
+          total_load_ms += ((t2-t1) / 1e6);
+        }
+
       }
 
       model->clear();
     }
 
-    avg_latency = total_ms / num_test;
-    results.emplace(avg_latency, load_size, i);
+    avg_infer_ms = total_infer_ms / num_test;
+    avg_load_ms = total_load_ms / num_test;
+    results.emplace(avg_infer_ms, load_size, i);
 
-    //std::cout << i << ", " << avg_latency << ", "
-    //          << load_size / 1024.f / 1024.f << "\n";
+    if (verbose_flag) {
+      std::cout << i << ", " << load_size/1024.f/1024.f << ", "
+                << avg_infer_ms << ", " << avg_load_ms << "\n";
+    }
   }
 
   double inmemory_lat = results.top().latency;
@@ -154,7 +186,7 @@ void benchmark(BenchmarkOptions* options) {
     results.pop();
   }
 
-  std::cout << "Result\n";
+  std::cout << "============ Summary ============\n";
   std::cout << "Total Number of Layers : " << model->n_layers << "\n";
   std::cout << "Total Model Size : " << model->model_size/1024.f/1024.f << " MB\n";
   std::cout << "In-Memory Inference Time : " << inmemory_lat << " ms\n";

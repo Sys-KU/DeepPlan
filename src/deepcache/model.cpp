@@ -70,17 +70,19 @@ void Model::reclaim_layers(int n_layers) {
   }
 }
 
-void Model::load_layers(int n_layers) {
+void Model::load_layers(int n_layers, bool non_blocking) {
   int cnt = 0;
 
   for (int i = 0; i < layers_load_info.size(); i++) {
     if (n_layers <= cnt) break;
     if (layers_load_info[i] == Device::CPU) {
-      layers[i].to(target_device);
+      layers[i].to(target_device, non_blocking);
       layers_load_info[i] = Device::CUDA;
       cnt++;
     }
   }
+
+  this->is_cuda = true;
 }
 
 std::vector<int> Model::get_host_layers() {
