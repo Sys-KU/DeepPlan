@@ -35,7 +35,7 @@ static void print_usage(char* program_name) {
   fprintf(stderr,
       "Usage : %s [-h] --model/-m MODEL_NAME [--device/-d DEVICES [DEVICES ...]]\n"
       "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan}]\n"
-      "\t\t[--batch/-b BATCH_SIZE",
+      "\t\t[--batch/-b BATCH_SIZE\n",
       program_name);
 }
 
@@ -47,6 +47,7 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
   char engine_types[][20] = { "in_memory", "demand", "pipeline", "deepplan"};
   int n_types = sizeof(engine_types) / 20;
   bool found = false;
+  bool pass_model = false;
 
   options->num_warmup  = 20;
   options->num_test    = 200;
@@ -61,6 +62,7 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
         break;
       case 'm':
         options->model_name = std::string(optarg);
+        pass_model = true;
         break;
       case 'e':
         found = false;
@@ -102,6 +104,12 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
         break;
         bool found = false;
     }
+  }
+
+  if (!pass_model) {
+    print_usage(argv[0]);
+    fprintf(stderr, "[Error] the following arguments are required: --model_name/-m\n");
+    exit(EXIT_FAILURE);
   }
 }
 

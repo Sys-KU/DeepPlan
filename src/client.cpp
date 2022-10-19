@@ -55,6 +55,9 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
   int n_engine_types = sizeof(engine_types) / 20;
   int n_workload_types = sizeof(workload_types) / 20;
   bool found = false;
+  bool pass_model = false;
+  bool pass_concurrency = false;
+  bool pass_rate = false;
 
   options->mp_size   = 1;
   options->n_warmup  = 1000;
@@ -76,12 +79,15 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
           }
           options->model_names = model_names;
         }
+        pass_model = true;
         break;
       case 'c':
         options->concurrency = (int)strtol(optarg, NULL, 10);
+        pass_concurrency = true;
         break;
       case 'r':
         options->rate = (int)strtol(optarg, NULL, 10);
+        pass_rate = true;
         break;
       case 'p':
         options->mp_size = (int)strtol(optarg, NULL, 10);
@@ -137,6 +143,19 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
         break;
         bool found = false;
     }
+  }
+
+  if (!(pass_model && pass_concurrency && pass_rate)) {
+    print_usage(argv[0]);
+    fprintf(stderr, "[Error] the following arguments are required:");
+    if (!pass_model)
+      fprintf(stderr, " --model_name/-m");
+    if (!pass_concurrency)
+      fprintf(stderr, " --concurrency/-c");
+    if (!pass_rate)
+      fprintf(stderr, " --rate/-r");
+
+    exit(EXIT_FAILURE);
   }
 
 }
