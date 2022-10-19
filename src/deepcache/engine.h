@@ -13,6 +13,8 @@ class Engine {
 
 torch::jit::IValue RunEngine(Model* model, ScriptModuleInput& x);
 
+void LoadLayers(Model* model);
+
 void Init(void);
 
 void Deinit(void);
