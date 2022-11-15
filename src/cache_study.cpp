@@ -43,6 +43,7 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
   char flag;
 
   bool found = false;
+  bool pass_model = false;
 
   options->num_warmup  = 20;
   options->num_test    = 30;
@@ -55,6 +56,7 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
         print_usage(argv[0]);
         break;
       case 'm':
+        pass_model = true;
         options->model_name = std::string(optarg);
         break;
       case 'b':
@@ -69,6 +71,12 @@ void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
         break;
         bool found = false;
     }
+  }
+
+  if (!pass_model) {
+    print_usage(argv[0]);
+    fprintf(stderr, "[Error] the following arguments are required: --model_name/-m\n");
+    exit(EXIT_FAILURE);
   }
 }
 

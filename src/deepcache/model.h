@@ -33,6 +33,10 @@ class Model : public libtorch::Model {
 
    // layers_load_info represent the load info whether layer is loaded or not.
    std::vector<Device> layers_load_info;
+
+   // remained_size represent the unloaded size of layers
+   // that are required to execute this model
+   size_t remained_size;
 };
 
 }

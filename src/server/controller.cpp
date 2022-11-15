@@ -3,6 +3,7 @@
 #include <network/session.h>
 #include <util.h>
 #include <deepplan/engine.h>
+#include <deepcache/engine.h>
 
 #include <thread>
 
@@ -11,6 +12,7 @@ Controller::Controller(network::MessageQueue& messages)
     alive(false) {init();};
 
 void Controller::init() {
+  deepcache::Init();
   deepplan::Init();
 
   alive = true;
@@ -64,7 +66,7 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
 
   // Update if the setting parameters are different
   if ((model_names_ != model_names) ||
-      (n_models_ < n_models) ||
+      (n_models_ != n_models) ||
       (engine_type_ != engine_type) ||
       (mp_size_ != mp_size)) {
     should_setup = true;
@@ -72,7 +74,6 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
 
   if (should_setup) {
     int n_workers = workers.size();
-    int n_models_per_worker = n_models / n_workers;
     std::vector<std::vector<int>> partitions(n_workers);
 
     for (int i = 0; i < n_workers; i++) {
@@ -84,10 +85,33 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
     }
 
     std::cout << "Models setup...\n";
-    for (int i = 0; i < n_workers; i++) {
-      workers[i]->reset_model();
-      workers[i]->init_model(model_names, n_models_per_worker,
-                             engine_type, partitions[i]);
+    if ((model_names_ == model_names) &&
+        (engine_type_ == engine_type) &&
+        (mp_size_ == mp_size)) {
+      // If requested n_models is less than current n_models,
+      // the models in Device memory are not freed,
+      // but are just unloaded into the host memory.
+      for (int i = 0; i < n_workers; i++) {
+        workers[i]->clear_models();
+      }
+      if (n_models_ < n_models) {
+        int n_models_per_worker = (n_models - n_models_) / n_workers;
+        for (int i = 0; i < n_workers; i++) {
+          workers[i]->add_models(model_names, n_models_per_worker,
+                                 engine_type, partitions[i]);
+        }
+      }
+
+      n_models = std::max(n_models, n_models_);
+    }
+    else {
+      int n_models_per_worker = n_models / n_workers;
+      for (int i = 0; i < n_workers; i++) {
+        workers[i]->free_models();
+        workers[i]->init_model_manager(engine_type);
+        workers[i]->add_models(model_names, n_models_per_worker,
+                               engine_type, partitions[i]);
+      }
     }
 
     model_names_ = model_names;

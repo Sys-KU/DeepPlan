@@ -40,7 +40,7 @@ static void print_usage(char* program_name) {
   fprintf(stderr,
       "Usage : %s [-h] --workload/-w WORKLOAD --model/-m MODEL_NAME\n"
       "\t\t--concurrency/-c CONCURRENCY --rate/-r RATE [--mp_size/-p MP_SIZE]\n"
-      "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan}]\n"
+      "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan,deepcache}]\n"
       "\t\t[--slo/-s SLO]\n",
       program_name);
 }
@@ -50,7 +50,7 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
   auto options = *benchmark_options;
   char flag;
 
-  char engine_types[][20] = { "in_memory", "demand", "pipeline", "deepplan" };
+  char engine_types[][20] = { "in_memory", "demand", "pipeline", "deepplan", "deepcache" };
   char workload_types[][20] = { "simple", "bursty", "azure" };
   int n_engine_types = sizeof(engine_types) / 20;
   int n_workload_types = sizeof(workload_types) / 20;

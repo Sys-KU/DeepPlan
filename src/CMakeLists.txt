@@ -70,6 +70,7 @@ target_link_libraries(benchmark
 add_executable(server ${SERVER_SRC})
 target_link_libraries(server
 	deepplan
+	deepcache
 	network
 	tbb
 	${Boost_LIBRARIES}

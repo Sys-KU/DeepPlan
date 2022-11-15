@@ -2,6 +2,7 @@
 #include <network/session.h>
 #include <server/model_manager.h>
 #include <deepplan/model.h>
+#include <deepcache/model.h>
 #include <optional>
 #include "tbb/concurrent_queue.h"
 
@@ -51,6 +52,26 @@ class LRUCache {
     return v;
   }
 
+  V pop(K* k) {
+    auto v = items.back().second;
+    *k = items.back().first;
+    index.erase(items.back().first);
+    items.pop_back();
+
+    return v;
+  }
+
+  V erase(const K& k) {
+    assert(exist(k));
+    auto itr = index.find(k);
+    auto v = itr->second->second;
+
+    index.erase(itr);
+    items.erase(itr->second);
+
+    return v;
+  }
+
   size_t size() {
     return index.size();
   }
@@ -70,10 +91,14 @@ class Worker {
       serverapi::InferenceRequest* request,
       std::function<void(serverapi::InferenceResponse*)> cb);
 
-  void init_model(std::vector<std::string> model_names, int n_models,
+  void init_model_manager(EngineType engine_type);
+
+  void add_models(std::vector<std::string> model_names, int n_models,
                   EngineType engine_type, std::vector<int> devices);
 
-  void reset_model();
+  void clear_models();
+
+  void free_models();
 
   void stop();
 
@@ -84,6 +109,7 @@ class Worker {
   std::atomic_bool alive;
   std::thread worker_thr;
   ModelManager* model_manager = nullptr;
-  LRUCache<int, deepplan::Model*>* running_models;
+  LRUCache<int, libtorch::Model*>* running_models;
+  LRUCache<int, libtorch::Model*>* partial_models;
   tbb::concurrent_queue<InferTask> queue_;
 };

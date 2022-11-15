@@ -16,6 +16,7 @@ Model::Model(const std::string name, const std::string model_path, const int dev
 void Model::init() {
   for (auto& layer : this->layers) {
     layer.pin_memory();
+    layer.cuda_backup();
   }
 
   this->layers_load_info.resize(n_layers);
@@ -25,6 +26,7 @@ void Model::init() {
 
   model.cuda_backup();
   this->is_cuda = false;
+  this->remained_size = model_size;
 }
 
 torch::jit::IValue Model::forward(ScriptModuleInput& x) {
@@ -39,10 +41,14 @@ void Model::to(at::Device device, bool non_blocking) {
     device = dest_device;
   }
 
-  if (device.is_cuda())
+  if (device.is_cuda()) {
     is_cuda = true;
-  else
+    remained_size = 0;
+  }
+  else {
     is_cuda = false;
+    remained_size = model_size;
+  }
 }
 
 void Model::clear()
@@ -53,6 +59,7 @@ void Model::clear()
       device = Device::CPU;
     }
     is_cuda = false;
+    remained_size = model_size;
   }
 }
 
@@ -61,8 +68,8 @@ void Model::reclaim_layers(int n_layers) {
 
   for (int i = layers_load_info.size()-1; i >= 0; i--) {
     if (layers_load_info[i] == Device::CUDA) {
-      layers[i].to(at::kCPU);
-      layers[i].pin_memory();
+      layers[i].clear();
+      remained_size -= util::getModuleSize(layers[i]);
       layers_load_info[i] = Device::CPU;
       cnt++;
     }
@@ -77,6 +84,7 @@ void Model::load_layers(int n_layers, bool non_blocking) {
     if (n_layers <= cnt) break;
     if (layers_load_info[i] == Device::CPU) {
       layers[i].to(target_device, non_blocking);
+      remained_size += util::getModuleSize(layers[i]);
       layers_load_info[i] = Device::CUDA;
       cnt++;
     }

@@ -166,6 +166,7 @@ void LoadLayers(Model* model) {
     model->layers_load_info[l] = Device::CUDA;
   }
   model->is_cuda = true;
+  model->remained_size = 0;
 }
 
 }

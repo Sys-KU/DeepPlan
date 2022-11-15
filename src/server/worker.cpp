@@ -2,12 +2,16 @@
 #include <server/worker.h>
 #include <server/model_manager.h>
 #include <deepplan/model.h>
+#include <deepcache/model.h>
 #include <cuda_runtime_api.h>
+#include <c10/cuda/CUDACachingAllocator.h>
 
 Worker::Worker(int device)
   : device(at::kCUDA, device),
     alive(true) {
       worker_thr = std::thread(std::bind(&Worker::run, this));
+      running_models = new LRUCache<int, libtorch::Model*>();
+      partial_models = new LRUCache<int, libtorch::Model*>();
     }
 
 void Worker::run() {
@@ -22,17 +26,46 @@ void Worker::run() {
       bool is_cold = false;
 
       int model_id = request->model_id;
-      deepplan::Model* model;
+      libtorch::Model* model;
 
       if (running_models->exist(model_id)) {
         model = running_models->get(model_id);
       }
       else {
         auto new_model = model_manager->get_model(request->model_id);
+        if (auto new_dc_model = dynamic_cast<deepcache::Model*>(new_model)) {
+          // DeepCache Eviction Policy
+          if (partial_models->exist(model_id)) {
+            partial_models->erase(model_id);
+          }
 
-        while (getDeviceActiveMemorySize(device.index()) >= capacity_) {
-          auto evict_model = running_models->pop();
-          evict_model->clear();
+          while ((getDeviceActiveMemorySize(device.index())+new_dc_model->remained_size)
+                 >= capacity_) {
+
+            // We control the number of full-cached models that we can keep in Device.
+            if (running_models->size() > 0) {
+              int evict_id;
+              auto evict_model = dynamic_cast<deepcache::Model*>(running_models->pop(&evict_id));
+              evict_model->reclaim_layers(50);
+              partial_models->put(evict_id, evict_model);
+            }
+            else if (partial_models->size() > 0) {
+              auto evict_model = dynamic_cast<deepcache::Model*>(partial_models->pop());
+              evict_model->clear();
+            }
+            else {
+              throw "There is no model to evict";
+              break;
+            }
+          }
+        }
+        else {
+          // DeepPlan Eviction Policy
+          while ((getDeviceActiveMemorySize(device.index())+new_model->model_size)
+                 >= capacity_) {
+            auto evict_model = running_models->pop();
+            evict_model->clear();
+          }
         }
 
         is_cold = true;
@@ -58,36 +91,51 @@ void Worker::run() {
   }
 }
 
-void Worker::init_model(std::vector<std::string> model_names, int n_models,
-                        EngineType engine_type, std::vector<int> devices) {
+void Worker::init_model_manager(EngineType engine_type) {
   if (model_manager == nullptr) {
-    size_t free;
-    size_t total;
-    size_t padding_size = (size_t)(5.5 * (1 << 30)); // 6GB
-    int n_models_per = n_models / model_names.size();
-
     model_manager = new ModelManager(engine_type);
-    for (auto model_name : model_names)
-      for (int i = 0; i < n_models_per; i++)
-        model_manager->add_model(model_name, devices);
-
-    cudaError_t err = cudaMemGetInfo(&free, &total);
-    if (err != cudaSuccess) {
-      throw "cudaMemGetInfo Error\n";
-    }
-
-    capacity_ = total - padding_size;
-    running_models = new LRUCache<int, deepplan::Model*>();
   }
 }
 
-void Worker::reset_model() {
+void Worker::add_models(std::vector<std::string> model_names, int n_models,
+                        EngineType engine_type, std::vector<int> devices) {
+  if (model_manager) {
+    for (int i = 0; i < n_models; i++) {
+      auto model_name = model_names[i % model_names.size()];
+      model_manager->add_model(model_name, devices);
+    }
+  }
+  else {
+    throw "model_manager should be initialized before add_modles()\n";
+  }
+  size_t free;
+  size_t total;
+  size_t padding_size = (size_t)(3.0 * (1 << 30)); // 2GB
+  cudaError_t err = cudaMemGetInfo(&free, &total);
+  if (err != cudaSuccess) {
+    throw "cudaMemGetInfo Error\n";
+  }
+  capacity_ = free - padding_size;
+  std::cout << "capcity: " << capacity_ / 1024 / 1024 / 1024 << "\n";
+}
+
+void Worker::free_models() {
+  if (model_manager) {
+    clear_models();
+    delete model_manager;
+
+    model_manager = nullptr;
+  }
+}
+
+void Worker::clear_models() {
   if (model_manager) {
     model_manager->clear();
-    delete model_manager;
-    model_manager = nullptr;
-    delete running_models;
+    while (running_models->size() > 0) {
+      running_models->pop();
+    }
   }
+  c10::cuda::CUDACachingAllocator::emptyCache();
 }
 
 void Worker::stop() {
@@ -95,7 +143,7 @@ void Worker::stop() {
   if (worker_thr.joinable())
     worker_thr.join();
 
-  reset_model();
+  free_models();
 }
 
 void Worker::infer(
