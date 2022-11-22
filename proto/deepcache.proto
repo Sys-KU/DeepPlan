@@ -21,6 +21,7 @@ message InferenceReqProto {
 message InferenceRspProto {
 	required uint32 req_id = 1;
 	required bool is_cold = 2;
+	required double infer_time = 3;
 }
 
 message UploadModelReqProto {

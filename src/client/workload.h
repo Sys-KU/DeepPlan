@@ -22,6 +22,8 @@ class Workload {
 
   WorkloadResult result(int slo);
 
+  void dump(std::string dump_file);
+
   Client client;
 
   std::vector<std::string> model_names;
@@ -34,6 +36,7 @@ class Workload {
  private:
   std::vector<std::pair<double, int>> _traces;
   std::vector<double> latencies;
+  std::vector<double> infer_times;
   int cold_start_cnt = 0;
 };
 

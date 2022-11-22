@@ -105,4 +105,68 @@ bool exists_dir(const char* path);
 
 std::vector<ScriptModule> travel_layers(ScriptModule module, std::string name="");
 
+template<typename K, typename V>
+class LRUCache {
+ public:
+  bool put(const K& k, const V& v) {
+    if(exist(k)) {
+      return false;
+    }
+
+    items.emplace_front(k, v);
+
+    index.emplace(k, items.begin());
+  }
+
+  bool exist(const K& k) {
+    return (index.count(k)>0);
+  }
+
+  V get(const K& k) {
+    assert(exist(k));
+    auto itr = index.find(k);
+
+    items.splice(items.begin(), items, itr->second);
+
+    return itr->second->second;
+  }
+
+  V pop() {
+    auto v = items.back().second;
+    index.erase(items.back().first);
+    items.pop_back();
+
+    return v;
+  }
+
+  V pop(K* k) {
+    auto v = items.back().second;
+    *k = items.back().first;
+    index.erase(items.back().first);
+    items.pop_back();
+
+    return v;
+  }
+
+  V erase(const K& k) {
+    assert(exist(k));
+    auto itr = index.find(k);
+    auto v = itr->second->second;
+
+    index.erase(itr);
+    items.erase(itr->second);
+
+    return v;
+  }
+
+  size_t size() {
+    return index.size();
+  }
+ private:
+  std::list<std::pair<K,V>> items;
+
+  std::unordered_map<K, typename std::list<std::pair<K,V>>::iterator> index;
+};
+
+
 } // namespace util

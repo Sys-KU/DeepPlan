@@ -23,11 +23,13 @@ void msg_inference_rsp_tx::set(serverapi::InferenceResponse& response) {
   set_req_id(response.req_id);
   msg.set_req_id(response.req_id);
   msg.set_is_cold(response.is_cold);
+  msg.set_infer_time(response.infer_time);
 }
 
 void msg_inference_rsp_rx::get(serverapi::InferenceResponse& response) {
   response.req_id = get_rx_req_id();
   response.is_cold = msg.is_cold();
+  response.infer_time = msg.infer_time();
 }
 
 void msg_upload_model_req_tx::set(serverapi::UploadModelRequest& request) {

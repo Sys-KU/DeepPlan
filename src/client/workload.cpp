@@ -64,6 +64,7 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
       uint64_t latency = (t_receive-t_send) / 1e6;
 
       this->latencies.push_back(latency);
+      this->infer_times.push_back(response->infer_time / 1000 / 1000); // ms
       if (response->is_cold) this->cold_start_cnt++;
     };
 
@@ -89,6 +90,20 @@ WorkloadResult Workload::result(int slo) {
   result.goodput_rate = (double)goodput_cnt / n_requests * 100;
 
   return result;
+}
+
+void Workload::dump(std::string dump_file) {
+  std::ofstream ofs;
+
+  ofs.open(dump_file);
+  if (ofs.is_open()) {
+    std::cout << "Dump inference times into '" << dump_file << "'\n";
+    for (auto time : infer_times) {
+      ofs << time << "\n";
+    }
+  }
+
+  std::cout << "Success Dump\n";
 }
 
 ModelLoader::ModelLoader(std::vector<std::string> model_names,

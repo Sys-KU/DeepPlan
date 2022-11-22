@@ -1,4 +1,5 @@
 #include <torch/cuda.h>
+#include <util.h>
 #include <server/worker.h>
 #include <server/model_manager.h>
 #include <deepplan/model.h>
@@ -10,8 +11,8 @@ Worker::Worker(int device)
   : device(at::kCUDA, device),
     alive(true) {
       worker_thr = std::thread(std::bind(&Worker::run, this));
-      running_models = new LRUCache<int, libtorch::Model*>();
-      partial_models = new LRUCache<int, libtorch::Model*>();
+      running_models = new util::LRUCache<int, libtorch::Model*>();
+      partial_models = new util::LRUCache<int, libtorch::Model*>();
     }
 
 void Worker::run() {
@@ -24,6 +25,7 @@ void Worker::run() {
       auto request = task.request;
       auto response = new serverapi::InferenceResponse();
       bool is_cold = false;
+      double t1, t2;
 
       int model_id = request->model_id;
       libtorch::Model* model;
@@ -46,7 +48,7 @@ void Worker::run() {
             if (running_models->size() > 0) {
               int evict_id;
               auto evict_model = dynamic_cast<deepcache::Model*>(running_models->pop(&evict_id));
-              evict_model->reclaim_layers(50);
+              evict_model->reclaim_layers(40);
               partial_models->put(evict_id, evict_model);
             }
             else if (partial_models->size() > 0) {
@@ -80,12 +82,15 @@ void Worker::run() {
             input_config.get(request->input, request->batch_size).to(device));
       }
 
+      t1 = util::now();
       model->forward(inputs);
 
       torch::cuda::synchronize(device.index());
+      t2 = util::now();
 
       response->req_id = request->req_id;
       response->is_cold = is_cold;
+      response->infer_time = t2 - t1;
       task.cb(response);
     }
   }

@@ -19,6 +19,7 @@ struct ClientOptions {
   int mp_size;
   EngineType engine_type;
   int slo;
+  std::string dump;
   int n_warmup;
   int n_test;
 };
@@ -33,6 +34,7 @@ static struct option long_options[] =
   {"mp_size",       required_argument,  0,  'p' },
   {"engine",        required_argument,  0,  'e' },
   {"slo",           required_argument,  0,  's' },
+  {"dump",          required_argument,  0,  'd' },
   {0, 0, 0, 0}
 };
 
@@ -41,7 +43,7 @@ static void print_usage(char* program_name) {
       "Usage : %s [-h] --workload/-w WORKLOAD --model/-m MODEL_NAME\n"
       "\t\t--concurrency/-c CONCURRENCY --rate/-r RATE [--mp_size/-p MP_SIZE]\n"
       "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan,deepcache}]\n"
-      "\t\t[--slo/-s SLO]\n",
+      "\t\t[--slo/-s SLO] [--dump/-d]\n",
       program_name);
 }
 
@@ -64,8 +66,9 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
   options->n_test    = 10000;
   options->engine_type = EngineType::DEEPPLAN;
   options->slo       = 100;
+  options->dump      = "";
 
-  while ((flag = getopt_long(argc, argv, "c:e:hm:r:s:w:p:", long_options, NULL)) != -1) {
+  while ((flag = getopt_long(argc, argv, "c:d:e:hm:r:s:w:p:", long_options, NULL)) != -1) {
     switch (flag) {
       case 'h':
         print_usage(argv[0]);
@@ -84,6 +87,9 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
       case 'c':
         options->concurrency = (int)strtol(optarg, NULL, 10);
         pass_concurrency = true;
+        break;
+      case 'd':
+        options->dump = std::string(optarg);
         break;
       case 'r':
         options->rate = (int)strtol(optarg, NULL, 10);
@@ -191,6 +197,10 @@ void simple_experiment(ClientOptions* options) {
   std::cout << "99% Latency: " << result.latency_99 << " ms\n";
   std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
   std::cout << "Goodput Rate: " << result.goodput_rate << " %\n";
+
+  if (!options->dump.empty()) {
+    workload->dump(options->dump);
+  }
 }
 
 void bursty_experiment(ClientOptions* options) {

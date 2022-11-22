@@ -25,6 +25,7 @@ struct InferenceRequest : public Request {
 struct InferenceResponse : public Response {
  public:
   bool is_cold;
+  double infer_time;
 };
 
 struct UploadModelRequest : public Request {
