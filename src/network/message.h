@@ -73,11 +73,11 @@ class msg_protobuf_rx : public message_rx {
   virtual uint64_t get_rx_msg_type() const { return MsgType; };
 
   virtual void* rx_body_buf() {
-    throw "Should not be called";
+    throw std::runtime_error("Should not be called");
   }
 
   virtual void body_buf_received(size_t len) {
-    throw "Should not be called";
+    throw std::runtime_error("Should not be called");
   }
 
   virtual void get(TRsp& response) = 0;

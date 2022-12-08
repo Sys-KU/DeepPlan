@@ -69,11 +69,27 @@ void Model::reclaim_layers(int n_layers) {
   for (int i = layers_load_info.size()-1; i >= 0; i--) {
     if (layers_load_info[i] == Device::CUDA) {
       layers[i].clear();
-      remained_size -= util::getModuleSize(layers[i]);
+      remained_size += util::getModuleSize(layers[i]);
       layers_load_info[i] = Device::CPU;
       cnt++;
     }
     if (n_layers <= cnt) break;
+  }
+}
+
+void Model::reclaim_memory(size_t size) {
+  size_t current_size = remained_size;
+
+  for (int i = layers_load_info.size()-1; i >= 0; i--) {
+    if (layers_load_info[i] == Device::CUDA) {
+      layers[i].clear();
+      current_size += util::getModuleSize(layers[i]);
+      layers_load_info[i] = Device::CPU;
+    }
+    if ((current_size - remained_size) > size) {
+      remained_size = current_size;
+      break;
+    }
   }
 }
 
@@ -84,7 +100,7 @@ void Model::load_layers(int n_layers, bool non_blocking) {
     if (n_layers <= cnt) break;
     if (layers_load_info[i] == Device::CPU) {
       layers[i].to(target_device, non_blocking);
-      remained_size += util::getModuleSize(layers[i]);
+      remained_size -= util::getModuleSize(layers[i]);
       layers_load_info[i] = Device::CUDA;
       cnt++;
     }

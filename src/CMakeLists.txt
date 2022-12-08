@@ -30,6 +30,7 @@ set(SERVER_SRC
 
 set(CLIENT_SRC
 		client.cpp
+		client/genzipf.cpp
 		client/client.cpp
 		client/workload.cpp
 )

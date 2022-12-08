@@ -12,8 +12,8 @@ struct WorkloadResult {
 
 class Workload {
  public:
-  Workload(int concurrency, int rate,
-           int n_requests, std::string addr, std::string port);
+  Workload(int concurrency, int rate, int n_requests,
+           std::string dist_type, std::string addr, std::string port);
 
   Workload(std::vector<unsigned>& rates,
            std::string addr, std::string port);
@@ -42,8 +42,8 @@ class Workload {
 
 class ModelLoader {
  public:
-  ModelLoader(std::vector<std::string> model_name,
-              int n_models, EngineType engine_type,
+  ModelLoader(std::vector<std::string> model_names, int n_models,
+              EngineType engine_type, ReclaimPolicy r_policy,
               int mp_size, std::string addr, std::string port);
 
   void run();
@@ -54,6 +54,7 @@ class ModelLoader {
   std::vector<std::string> model_names;
   int n_models;
   EngineType engine_type;
+  ReclaimPolicy r_policy;
   int mp_size;
   std::string addr;
   std::string port;

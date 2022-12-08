@@ -48,11 +48,12 @@ void Controller::run() {
         std::vector<std::string> model_names = upload_model->model_names;
         int n_models = upload_model->n_models;
         EngineType engine_type = static_cast<EngineType>(upload_model->engine_type);
+        ReclaimPolicy r_policy = static_cast<ReclaimPolicy>(upload_model->r_policy);
         int mp_size = upload_model->mp_size;
 
         auto response = new serverapi::UploadModelResponse();
 
-        setup_models(model_names, n_models, engine_type, mp_size);
+        setup_models(model_names, n_models, engine_type, r_policy, mp_size);
 
         response->req_id = upload_model->req_id;
         message.srv_session->send_response(response);
@@ -61,19 +62,21 @@ void Controller::run() {
   }
 }
 
-void Controller::setup_models(std::vector<std::string> model_names, int n_models, EngineType engine_type, int mp_size) {
+void Controller::setup_models(std::vector<std::string> model_names, int n_models,
+                              EngineType engine_type, ReclaimPolicy r_policy, int mp_size) {
+  int n_workers = workers.size();
   bool should_setup = false;
 
   // Update if the setting parameters are different
   if ((model_names_ != model_names) ||
       (n_models_ != n_models) ||
       (engine_type_ != engine_type) ||
+      (r_policy_ != r_policy) ||
       (mp_size_ != mp_size)) {
     should_setup = true;
   }
 
   if (should_setup) {
-    int n_workers = workers.size();
     std::vector<std::vector<int>> partitions(n_workers);
 
     for (int i = 0; i < n_workers; i++) {
@@ -93,6 +96,7 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
       // but are just unloaded into the host memory.
       for (int i = 0; i < n_workers; i++) {
         workers[i]->clear_models();
+        workers[i]->set_r_policy(r_policy);
       }
       if (n_models_ < n_models) {
         int n_models_per_worker = (n_models - n_models_) / n_workers;
@@ -111,6 +115,7 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
         workers[i]->init_model_manager(engine_type);
         workers[i]->add_models(model_names, n_models_per_worker,
                                engine_type, partitions[i]);
+        workers[i]->set_r_policy(r_policy);
       }
     }
 
@@ -118,11 +123,12 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
     n_models_ = n_models;
     engine_type_ = engine_type;
     mp_size_ = mp_size;
+    r_policy_ = r_policy;
 
     std::cout << "Modele setup complete\n";
   }
-  else return;
 
+  return;
 }
 
 void Controller::shutdown() {

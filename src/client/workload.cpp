@@ -1,7 +1,8 @@
 #include <client/workload.h>
+#include <client/genzipf.h>
 
-Workload::Workload(int concurrency, int rate,
-                   int n_requests, std::string addr, std::string port)
+Workload::Workload(int concurrency, int rate, int n_requests,
+                   std::string dist_type, std::string addr, std::string port)
     : concurrency(concurrency),
       rate(rate),
       n_requests(n_requests),
@@ -9,12 +10,25 @@ Workload::Workload(int concurrency, int rate,
       addr(addr),
       port(port) {
         std::minstd_rand gen(0);
-        std::uniform_int_distribution<> udist(0, concurrency-1);
         std::exponential_distribution<double> edist(rate);
 
-        for (auto& trace : _traces) {
-          trace.first = edist(gen);
-          trace.second = udist(gen);
+        if (dist_type == "uniform") {
+          std::uniform_int_distribution<> udist(0, concurrency-1);
+
+          for (auto& trace : _traces) {
+            trace.first = edist(gen);
+            trace.second = udist(gen);
+          }
+        }
+        else if (dist_type == "zipfian") {
+          rand_val(1);
+          for (auto& trace : _traces) {
+            trace.first = edist(gen);
+            trace.second = zipf(1.5, concurrency) - 1;
+          }
+        }
+        else {
+          throw std::runtime_error("Not found the matching dist_type");
         }
       };
 
@@ -106,12 +120,13 @@ void Workload::dump(std::string dump_file) {
   std::cout << "Success Dump\n";
 }
 
-ModelLoader::ModelLoader(std::vector<std::string> model_names,
-                         int n_models, EngineType engine_type,
+ModelLoader::ModelLoader(std::vector<std::string> model_names, int n_models,
+                         EngineType engine_type, ReclaimPolicy r_policy,
                          int mp_size, std::string addr, std::string port)
   : model_names(model_names),
     n_models(n_models),
     engine_type(engine_type),
+    r_policy(r_policy),
     mp_size(mp_size),
     addr(addr),
     port(port) {};
@@ -128,7 +143,7 @@ void ModelLoader::run() {
     input_generator.generate_input(model_names[i/n_models_per_type], 1, &inputs[i]);
   }
 
-  client.upload_model(model_names, n_models, engine_type, mp_size);
+  client.upload_model(model_names, n_models, engine_type, r_policy, mp_size);
 
   for (int i = 0; i < n_models; i++) {
     auto onSuccess = [this](serverapi::Response* rsp) {};

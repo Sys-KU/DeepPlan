@@ -29,6 +29,12 @@ typedef enum
   NONE,
 } EngineType;
 
+typedef enum
+{
+  RR = 0,
+  BALANCE,
+} ReclaimPolicy;
+
 struct InputConfig {
  public:
   InputConfig(ModelInput io)

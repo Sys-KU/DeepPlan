@@ -38,6 +38,7 @@ void msg_upload_model_req_tx::set(serverapi::UploadModelRequest& request) {
   *msg.mutable_model_names() = {request.model_names.begin(), request.model_names.end()};
   msg.set_n_models(request.n_models);
   msg.set_engine_type(request.engine_type);
+  msg.set_r_policy(request.r_policy);
   msg.set_mp_size(request.mp_size);
 }
 
@@ -46,6 +47,7 @@ void msg_upload_model_req_rx::get(serverapi::UploadModelRequest& request) {
   request.model_names = std::vector<std::string>(msg.model_names().begin(), msg.model_names().end());
   request.n_models = msg.n_models();
   request.engine_type = msg.engine_type();
+  request.r_policy = msg.r_policy();
   request.mp_size = msg.mp_size();
 }
 

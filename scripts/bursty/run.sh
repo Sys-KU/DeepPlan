@@ -15,9 +15,11 @@ TARGET="client"
 
 model_name="bert_base"
 engine="deepcache"
-min_conc=10
-max_conc=100
+workload="skew"
+min_conc=50
+max_conc=160
 step_conc=10
+SLO=100
 rate=50
 
 server_cmd="$build_path/server"
@@ -33,13 +35,13 @@ tmp_file="/tmp/deepcache_bursty_${model_name}_${engine}"
 echo "Concurrency, Latency, Goodput, ColdStart" > $tmp_file
 
 echo "Model Setup"
-client_cmd="$build_path/client -m $model_name -r $rate -c $max_conc -w simple -e $engine"
-$client_cmd 1> /dev/null
+#client_cmd="$build_path/client -m $model_name -r $rate -c $max_conc -w $workload -e $engine -s $SLO"
+#$client_cmd 1> /dev/null
 
 echo "Start Experiment ($engine)"
 for ((c=$min_conc; c<=$max_conc; c+=$step_conc)); do
 	echo "== Concurrency $c =="
-	client_cmd="$build_path/client -m $model_name -r $rate -c $c -w simple -e $engine"
+	client_cmd="$build_path/client -m $model_name -r $rate -c $c -w $workload -e $engine -s $SLO"
 	output=`$client_cmd`
 
 	latency=$(echo "$output" | awk '{if ($2 == "Latency:") { print $(NF-1)}}')

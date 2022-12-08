@@ -33,6 +33,7 @@ struct UploadModelRequest : public Request {
   std::vector<std::string> model_names;
   uint32_t n_models;
   uint32_t engine_type;
+  uint32_t r_policy;
   uint32_t mp_size;
 };
 

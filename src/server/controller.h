@@ -18,7 +18,8 @@ class Controller {
 
   void shutdown();
 
-  void setup_models(std::vector<std::string> model_name, int n_models, EngineType engine_type, int mp_size);
+  void setup_models(std::vector<std::string> model_name, int n_models,
+                    EngineType engine_type, ReclaimPolicy r_policy, int mp_size);
 
  private:
   std::atomic_bool alive;
@@ -33,4 +34,5 @@ class Controller {
   int n_models_ = 0;
   int mp_size_ = 0;
   EngineType engine_type_ = EngineType::NONE;
+  ReclaimPolicy r_policy_ = ReclaimPolicy::RR;
 };

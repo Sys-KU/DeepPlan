@@ -12,8 +12,18 @@ Worker::Worker(int device)
     alive(true) {
       worker_thr = std::thread(std::bind(&Worker::run, this));
       running_models = new util::LRUCache<int, libtorch::Model*>();
-      partial_models = new util::LRUCache<int, libtorch::Model*>();
+      partial_models_list = std::list<util::LRUCache<int, libtorch::Model*>*>(10);
+      for (auto& models_list : partial_models_list) {
+        models_list = new util::LRUCache<int, libtorch::Model*>();
+      }
     }
+
+Worker::~Worker() {
+  delete running_models;
+  for (auto& models_list : partial_models_list) {
+    delete models_list;
+  }
+}
 
 void Worker::run() {
   torch::NoGradGuard no_grad;
@@ -28,52 +38,16 @@ void Worker::run() {
       double t1, t2;
 
       int model_id = request->model_id;
-      libtorch::Model* model;
 
-      if (running_models->exist(model_id)) {
-        model = running_models->get(model_id);
+      auto model = find_model(model_id, &is_cold);
+      if (model == nullptr) {
+        std::stringstream ss;
+        ss << "Not found the model with id " << model_id << "\n";
+
+        throw std::runtime_error(ss.str());
       }
-      else {
-        auto new_model = model_manager->get_model(request->model_id);
-        if (auto new_dc_model = dynamic_cast<deepcache::Model*>(new_model)) {
-          // DeepCache Eviction Policy
-          if (partial_models->exist(model_id)) {
-            partial_models->erase(model_id);
-          }
 
-          while ((getDeviceActiveMemorySize(device.index())+new_dc_model->remained_size)
-                 >= capacity_) {
-
-            // We control the number of full-cached models that we can keep in Device.
-            if (running_models->size() > 0) {
-              int evict_id;
-              auto evict_model = dynamic_cast<deepcache::Model*>(running_models->pop(&evict_id));
-              evict_model->reclaim_layers(40);
-              partial_models->put(evict_id, evict_model);
-            }
-            else if (partial_models->size() > 0) {
-              auto evict_model = dynamic_cast<deepcache::Model*>(partial_models->pop());
-              evict_model->clear();
-            }
-            else {
-              throw "There is no model to evict";
-              break;
-            }
-          }
-        }
-        else {
-          // DeepPlan Eviction Policy
-          while ((getDeviceActiveMemorySize(device.index())+new_model->model_size)
-                 >= capacity_) {
-            auto evict_model = running_models->pop();
-            evict_model->clear();
-          }
-        }
-
-        is_cold = true;
-        running_models->put(model_id, new_model);
-        model = new_model;
-      }
+      secure_memory_to_load_model(model);
 
       ScriptModuleInput inputs;
 
@@ -87,6 +61,8 @@ void Worker::run() {
 
       torch::cuda::synchronize(device.index());
       t2 = util::now();
+
+      running_models->put(model_id, model);
 
       response->req_id = request->req_id;
       response->is_cold = is_cold;
@@ -102,6 +78,12 @@ void Worker::init_model_manager(EngineType engine_type) {
   }
 }
 
+void Worker::set_r_policy(ReclaimPolicy r_policy) {
+  if (r_policy_ != r_policy) {
+    r_policy_ = r_policy;
+  }
+}
+
 void Worker::add_models(std::vector<std::string> model_names, int n_models,
                         EngineType engine_type, std::vector<int> devices) {
   if (model_manager) {
@@ -111,18 +93,139 @@ void Worker::add_models(std::vector<std::string> model_names, int n_models,
     }
   }
   else {
-    throw "model_manager should be initialized before add_modles()\n";
+    throw std::runtime_error("model_manager should be initialized before add_modles()\n");
   }
   size_t free;
   size_t total;
   size_t padding_size = (size_t)(3.0 * (1 << 30)); // 2GB
   cudaError_t err = cudaMemGetInfo(&free, &total);
   if (err != cudaSuccess) {
-    throw "cudaMemGetInfo Error\n";
+    throw std::runtime_error("cudaMemGetInfo Error\n");
   }
   capacity_ = free - padding_size;
   std::cout << "capcity: " << capacity_ / 1024 / 1024 / 1024 << "\n";
 }
+
+libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
+  libtorch::Model* model = nullptr;
+
+  if (running_models->exist(model_id)) {
+    model = running_models->erase(model_id);
+
+    // If this model is DeepCache and partial,
+    // it should secure memory to load the model
+    if (auto dc_model = dynamic_cast<deepcache::Model*>(model)) {
+      if (dc_model->remained_size > 0) {
+        *is_cold = true;
+      }
+    }
+  }
+  else {
+    model = model_manager->get_model(model_id);
+    if (auto dc_model = dynamic_cast<deepcache::Model*>(model) &&
+        r_policy_ == ReclaimPolicy::BALANCE) {
+      // Balance reclaim policy should check if this model is in partial models list
+      // If the model is found, it should be cleared from that list
+      auto iter = partial_models_list.begin();
+      for (iter; iter != partial_models_list.end(); iter++) {
+        if ((*iter)->exist(model_id)) {
+          (*iter)->erase(model_id);
+        }
+      }
+    }
+
+    *is_cold = true;
+  }
+
+  return model;
+}
+
+void Worker::secure_memory_to_load_model(libtorch::Model* model) {
+  // DeepCache Eviction Policy
+  if (auto dc_model = dynamic_cast<deepcache::Model*>(model)) {
+    if (dc_model->remained_size > 0) {
+      switch (r_policy_) {
+        case ReclaimPolicy::RR:
+          while ((getDeviceActiveMemorySize(device.index())+dc_model->remained_size)
+              >= capacity_) {
+
+            if (running_models->size() > 0) {
+              // We control the number of full-cached models that we can keep in Device.
+              int evict_id;
+              auto evict_model = dynamic_cast<deepcache::Model*>(running_models->pop(&evict_id));
+
+              evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
+
+              if (evict_model->remained_size
+                  < evict_model->model_size * (1 - MINIMUM_CACHE_MEMORY_RATE)) {
+                running_models->put(evict_id, evict_model);
+              }
+            }
+            else {
+              throw std::runtime_error("There is no model to evict");
+            }
+          }
+
+          break;
+        case ReclaimPolicy::BALANCE:
+          {
+            auto models_list = partial_models_list;
+            models_list.push_front(running_models);
+
+            while ((getDeviceActiveMemorySize(device.index())+dc_model->remained_size)
+                >= capacity_) {
+              bool found = false;
+
+              for (auto iter = models_list.begin(); iter != models_list.end(); iter++) {
+                if ((*iter)->size() > 0) {
+                  int evict_id;
+                  auto evict_model = dynamic_cast<deepcache::Model*>((*iter)->pop(&evict_id));
+                  evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
+                  found = true;
+
+                  iter++;
+                  if (iter != models_list.end()) {
+                    (*iter)->put(evict_id, evict_model);
+                  }
+                  else {
+                    // If the caching memory of the evict_model leaves on GPU,
+                    // we expand partial_models_list
+                    if (evict_model->remained_size < evict_model->model_size) {
+                      auto partial_models = new util::LRUCache<int, libtorch::Model*>();
+                      partial_models->put(evict_id, evict_model);
+                      partial_models_list.push_back(std::move(partial_models));
+                    }
+                  }
+
+                  break;
+                }
+              }
+
+              if (!found) {
+                throw std::runtime_error("There is no model to evict");
+              }
+            }
+          }
+
+          break;
+
+        default:
+          break;
+      }
+    }
+  }
+  // Otherwise, LRU Eviction Policy
+  else {
+    if (!model->is_cuda) {
+      while ((getDeviceActiveMemorySize(device.index())+model->model_size)
+          >= capacity_) {
+        auto evict_model = running_models->pop();
+        evict_model->clear();
+      }
+    }
+  }
+}
+
 
 void Worker::free_models() {
   if (model_manager) {
@@ -138,6 +241,11 @@ void Worker::clear_models() {
     model_manager->clear();
     while (running_models->size() > 0) {
       running_models->pop();
+    }
+    for (auto p_models : partial_models_list) {
+      while (p_models->size() > 0) {
+        p_models->pop();
+      }
     }
   }
   c10::cuda::CUDACachingAllocator::emptyCache();
