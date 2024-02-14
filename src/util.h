@@ -174,5 +174,19 @@ class LRUCache {
   std::unordered_map<K, typename std::list<std::pair<K,V>>::iterator> index;
 };
 
+class progressbar {
+  public:
+    progressbar() {};
+
+    progressbar(int n_cycles);
+
+    void update(int n = 1);
+
+  private:
+    int n_cycles;
+    int count;
+    int bar_width;
+};
+
 
 } // namespace util

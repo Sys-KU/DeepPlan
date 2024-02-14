@@ -1,4 +1,6 @@
 #include <util.h>
+#include <sys/ioctl.h>
+#include <sstream>
 
 namespace util {
 
@@ -224,6 +226,50 @@ std::vector<ScriptModule> travel_layers(ScriptModule module, std::string name) {
       traveled_layers.insert(traveled_layers.end(), layers.begin(), layers.end());
     }
     return traveled_layers;
+  }
+}
+
+progressbar::progressbar(int n_cycles)
+  : n_cycles(n_cycles),
+    count(0) {
+  int cols = 80;
+
+#ifdef TIOCGSIZE
+  struct ttysize ts;
+  ioctl(STDIN_FILENO, TIOCGSIZE, &ts);
+  cols = ts.ts_cols;
+#elif defined(TIOCGWINSZ)
+  struct winsize ts;
+  ioctl(STDIN_FILENO, TIOCGWINSZ, &ts);
+  cols = ts.ws_col;
+#endif /* TIOCGSIZE */
+
+  std::stringstream stream;
+  stream << " 100 % [] " << n_cycles << "/" << n_cycles;
+  int desc_size = stream.str().size();
+
+  bar_width = cols - desc_size - 10; // leave a blank space
+
+  update(0);
+}
+
+void progressbar::update(int n) {
+  count = count + n;
+  float rate = (float)count / n_cycles;
+  std::cout << "\r " << int(rate * 100) << "% [";
+  for (int i = 0; i < bar_width; i++) {
+    if (i <= bar_width * rate) {
+        std::cout << "#";
+    }
+    else {
+        std::cout << " ";
+    }
+  }
+  std::cout << "] " << count << "/" << n_cycles;
+  std::cout.flush();
+
+  if (count >= n_cycles) {
+      std::cout << "\n";
   }
 }
 

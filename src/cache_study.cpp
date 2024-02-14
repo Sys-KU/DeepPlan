@@ -126,9 +126,13 @@ void benchmark(BenchmarkOptions* options) {
   double t1, t2, total_infer_ms, avg_infer_ms, total_load_ms, avg_load_ms;
   std::stack<InferResult> results;
   size_t load_size;
+  util::progressbar progressbar;
 
   if (verbose_flag) {
     std::cout << "Number of cached layers, Load Size (MB), Inference Latency (ms), Load Latency (ms)\n";
+  }
+  else {
+    progressbar = util::progressbar(model->n_layers + 1);
   }
 
   for (int i = 0; i <= model->n_layers; i++) {
@@ -178,6 +182,9 @@ void benchmark(BenchmarkOptions* options) {
     if (verbose_flag) {
       std::cout << i << ", " << load_size/1024.f/1024.f << ", "
                 << avg_infer_ms << ", " << avg_load_ms << "\n";
+    }
+    else {
+        progressbar.update();
     }
   }
 
