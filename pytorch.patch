@@ -1,341 +1,209 @@
-diff --git a/aten/src/ATen/cuda/CublasHandlePool.cpp b/aten/src/ATen/cuda/CublasHandlePool.cpp
-index effe86fd64..de2183359e 100644
---- a/aten/src/ATen/cuda/CublasHandlePool.cpp
-+++ b/aten/src/ATen/cuda/CublasHandlePool.cpp
-@@ -15,10 +15,10 @@ void destroyCublasHandle(cublasHandle_t handle) {
- // happens in fbcode setting. @colesbury and @soumith decided to not destroy
- // the handle as a workaround.
- //   - Comments of @soumith copied from cuDNN handle pool implementation
--#ifdef NO_CUDNN_DESTROY_HANDLE
--#else
--    cublasDestroy(handle);
--#endif
-+// #ifdef NO_CUDNN_DESTROY_HANDLE
-+// #else
-+//     cublasDestroy(handle);
-+// #endif
+diff --git a/aten/src/ATen/cuda/CachingHostAllocator.cpp b/aten/src/ATen/cuda/CachingHostAllocator.cpp
+index a6646779cfb..ad48f1cfc38 100644
+--- a/aten/src/ATen/cuda/CachingHostAllocator.cpp
++++ b/aten/src/ATen/cuda/CachingHostAllocator.cpp
+@@ -383,7 +383,7 @@ void CachingHostAllocator_emptyCache() {
+   getCUDAHostAllocator().empty_cache();
  }
  
- using CuBlasPoolType = DeviceThreadHandlePool<cublasHandle_t, createCublasHandle, destroyCublasHandle>;
+-struct CUDAHostAllocatorWrapper final : public at::Allocator {
++struct HostAllocatorWrapper final : public at::Allocator {
+   at::DataPtr allocate(size_t size) const override {
+     auto ptr_and_ctx = getCUDAHostAllocator().allocate(size);
+     return {
+@@ -394,9 +394,29 @@ struct CUDAHostAllocatorWrapper final : public at::Allocator {
+   }
+ };
+ 
+-static CUDAHostAllocatorWrapper cuda_host_allocator;
++static HostAllocatorWrapper host_allocator;
+ 
+ at::Allocator* getCachingHostAllocator() {
++  return &host_allocator;
++}
++
++struct CUDAHostAllocatorWrapper final : public at::Allocator {
++  at::DataPtr allocate(size_t size) const override {
++    int device;
++    C10_CUDA_CHECK(cudaGetDevice(&device));
++    auto ptr_and_ctx = getCUDAHostAllocator().allocate(size);
++
++    return {
++        ptr_and_ctx.first,
++        ptr_and_ctx.second,
++        &CUDAHostAllocatorDeleter,
++        at::Device(at::DeviceType::CUDA, device)};
++  }
++};
++
++static CUDAHostAllocatorWrapper cuda_host_allocator;
++
++at::Allocator* getCachingCUDAHostAllocator() {
+   return &cuda_host_allocator;
+ }
+ 
+diff --git a/aten/src/ATen/cuda/CachingHostAllocator.h b/aten/src/ATen/cuda/CachingHostAllocator.h
+index 65ad7f7d16e..bcf6194f1ba 100644
+--- a/aten/src/ATen/cuda/CachingHostAllocator.h
++++ b/aten/src/ATen/cuda/CachingHostAllocator.h
+@@ -21,6 +21,7 @@ namespace at::cuda {
+ // blocks, unlike the caching device allocator.
+ //
+ TORCH_CUDA_CPP_API c10::Allocator* getCachingHostAllocator();
++TORCH_CUDA_CPP_API c10::Allocator* getCachingCUDAHostAllocator();
+ 
+ // Records an event in the specified stream. The allocation corresponding to the
+ // input `ptr`/`ctx` will not be re-used until the event has occurred.
 diff --git a/aten/src/ATen/cuda/PinnedMemoryAllocator.cpp b/aten/src/ATen/cuda/PinnedMemoryAllocator.cpp
-index 3e6c683d8c..c7109158c8 100644
+index 973027cd87f..e2242a03f26 100644
 --- a/aten/src/ATen/cuda/PinnedMemoryAllocator.cpp
 +++ b/aten/src/ATen/cuda/PinnedMemoryAllocator.cpp
-@@ -10,6 +10,11 @@
- namespace at { namespace cuda {
- 
- at::Allocator* getPinnedMemoryAllocator() {
-+  auto state = globalContext().lazyInitCUDA();
-+  return state->hostAllocator;
-+}
-+
-+at::Allocator* getCUDAHostAllocator() {
-   auto state = globalContext().lazyInitCUDA();
-   return state->cudaHostAllocator;
- }
-diff --git a/aten/src/ATen/cuda/PinnedMemoryAllocator.h b/aten/src/ATen/cuda/PinnedMemoryAllocator.h
-index 01246fff04..a54d740882 100644
---- a/aten/src/ATen/cuda/PinnedMemoryAllocator.h
-+++ b/aten/src/ATen/cuda/PinnedMemoryAllocator.h
-@@ -5,4 +5,7 @@
- namespace at { namespace cuda {
- 
- TORCH_CUDA_CPP_API at::Allocator* getPinnedMemoryAllocator();
-+
-+TORCH_CUDA_CPP_API at::Allocator* getCUDAHostAllocator();
-+
- }} // namespace at::cuda
-diff --git a/aten/src/ATen/cuda/detail/CUDAHooks.cpp b/aten/src/ATen/cuda/detail/CUDAHooks.cpp
-index 9fb8284b7f..7cb2040821 100644
---- a/aten/src/ATen/cuda/detail/CUDAHooks.cpp
-+++ b/aten/src/ATen/cuda/detail/CUDAHooks.cpp
-@@ -196,6 +196,10 @@ Allocator* CUDAHooks::getCUDADeviceAllocator() const {
-   return at::cuda::getCUDADeviceAllocator();
+@@ -29,4 +29,24 @@ Tensor _pin_memory_cuda(const Tensor& self, c10::optional<Device> device) {
  }
  
-+Allocator* CUDAHooks::getCUDAHostAllocator() const {
-+  return at::cuda::getCUDAHostAllocator();
-+}
-+
- bool CUDAHooks::compiledWithCuDNN() const {
-   return AT_CUDNN_ENABLED();
- }
-diff --git a/aten/src/ATen/cuda/detail/CUDAHooks.h b/aten/src/ATen/cuda/detail/CUDAHooks.h
-index 1423810974..6cbe2b1008 100644
---- a/aten/src/ATen/cuda/detail/CUDAHooks.h
-+++ b/aten/src/ATen/cuda/detail/CUDAHooks.h
-@@ -27,6 +27,7 @@ struct CUDAHooks : public at::CUDAHooksInterface {
-   c10::optional<int64_t> getDevceIndexWithPrimaryContext() const override;
-   Allocator* getCUDADeviceAllocator() const override;
-   Allocator* getPinnedMemoryAllocator() const override;
-+  Allocator* getCUDAHostAllocator() const override;
-   bool compiledWithCuDNN() const override;
-   bool compiledWithMIOpen() const override;
-   bool supportsDilatedConvolutionWithCuDNN() const override;
-diff --git a/aten/src/ATen/detail/CUDAHooksInterface.h b/aten/src/ATen/detail/CUDAHooksInterface.h
-index afe88761d8..0130a74cda 100644
---- a/aten/src/ATen/detail/CUDAHooksInterface.h
-+++ b/aten/src/ATen/detail/CUDAHooksInterface.h
-@@ -129,6 +129,10 @@ struct TORCH_API CUDAHooksInterface {
-     TORCH_CHECK(false, "CUDADeviceAllocator requires CUDA. ", CUDA_HELP);
-   }
  
-+  virtual Allocator* getCUDAHostAllocator() const {
-+    TORCH_CHECK(false, "CUDAHostAllocator requires CUDA. ", CUDA_HELP);
-+  }
-+
-   virtual bool compiledWithCuDNN() const {
-     return false;
-   }
-diff --git a/aten/src/ATen/native/Memory.cpp b/aten/src/ATen/native/Memory.cpp
-index 11eff11cef..e898b6c136 100644
---- a/aten/src/ATen/native/Memory.cpp
-+++ b/aten/src/ATen/native/Memory.cpp
-@@ -18,6 +18,7 @@ Tensor pin_memory(const Tensor& self) {
-     AT_ERROR("cannot pin '", self.toString(), "' only dense CPU tensors can be pinned");
-   }
-   if (self.is_pinned()) {
-+    TORCH_WARN("Already '", self.toString(), "' is pinned");
-     return self;
-   }
-   auto* allocator = detail::getCUDAHooks().getPinnedMemoryAllocator();
-@@ -32,6 +33,28 @@ Tensor pin_memory(const Tensor& self) {
-   return tensor;
- }
- 
-+Tensor cuda_host(const Tensor& self) {
++Tensor _cuda_host_cuda(const Tensor& self, c10::optional<Device> device) {
++  TORCH_INTERNAL_ASSERT_DEBUG_ONLY(!device.has_value());
 +  if (self.is_pinned() && self.device().is_cuda()) {
 +    TORCH_WARN("Already '", self.toString(), "' is pinned");
 +    return self;
 +  }
-+  auto* allocator = detail::getCUDAHooks().getCUDAHostAllocator();
++  auto* allocator = at::cuda::getCUDAHostMemoryAllocator();
 +  auto storage = Storage(
 +      Storage::use_byte_size_t(),
 +      detail::computeStorageNbytes(
 +        self.sizes(), self.strides(), self.dtype().itemsize()),
 +      allocator,
-+      /*resizable=*/false
-+      );
++      /*resizable=*/false);
 +
-+  auto specified_options = self.options();
-+  specified_options = specified_options.device(at::kCUDA);
-+
-+  auto tensor = at::empty({0}, specified_options).set_(storage, 0, self.sizes(), self.strides());
++  auto tensor = at::empty({0}, self.options().device(at::kCUDA)).set_(storage, 0, self.sizes(), self.strides());
 +  tensor.copy_(self);
 +  return tensor;
 +}
 +
- // Exposes at::has_internal_overlap as an operator for testing purposes
- int64_t _debug_has_internal_overlap(const Tensor& self) {
-   return static_cast<int64_t>(at::has_internal_overlap(self));
-diff --git a/aten/src/ATen/native/TensorSync.cpp b/aten/src/ATen/native/TensorSync.cpp
-new file mode 100644
-index 0000000000..7caf920193
---- /dev/null
-+++ b/aten/src/ATen/native/TensorSync.cpp
-@@ -0,0 +1,43 @@
-+#include <ATen/ATen.h>
-+#include <THC/THCTensorSync.h>
-+#include <c10/cuda/CUDAStream.h>
 +
-+namespace at {
-+namespace native {
+ } // namespace at::native
+diff --git a/aten/src/ATen/cuda/PinnedMemoryAllocator.h b/aten/src/ATen/cuda/PinnedMemoryAllocator.h
+index 854f5d8dd12..ff337867647 100644
+--- a/aten/src/ATen/cuda/PinnedMemoryAllocator.h
++++ b/aten/src/ATen/cuda/PinnedMemoryAllocator.h
+@@ -8,4 +8,8 @@ namespace at::cuda {
+ inline TORCH_CUDA_CPP_API at::Allocator* getPinnedMemoryAllocator() {
+   return getCachingHostAllocator();
+ }
 +
-+void record_tensor(Tensor& self, const Tensor& tensor, Device device) {
-+  void* old_ptr = self.data_ptr();
-+  void* new_ptr = tensor.data_ptr();
++inline TORCH_CUDA_CPP_API at::Allocator* getCUDAHostMemoryAllocator() {
++  return getCachingCUDAHostAllocator();
++}
+ } // namespace at::cuda
+diff --git a/aten/src/ATen/cuda/detail/CUDAHooks.cpp b/aten/src/ATen/cuda/detail/CUDAHooks.cpp
+index acb9b1931f0..ae279444390 100644
+--- a/aten/src/ATen/cuda/detail/CUDAHooks.cpp
++++ b/aten/src/ATen/cuda/detail/CUDAHooks.cpp
+@@ -11,6 +11,7 @@
+ #include <ATen/cuda/PeerToPeerAccess.h>
+ #include <ATen/cuda/PinnedMemoryAllocator.h>
+ #include <ATen/cuda/nvrtc_stub/ATenNVRTC.h>
++#include <ATen/cuda/TensorSync.h>
+ #include <ATen/detail/CUDAHooksInterface.h>
+ #include <ATen/native/cuda/CuFFTPlanCache.h>
+ #include <c10/util/Exception.h>
+@@ -107,6 +108,8 @@ void CUDAHooks::initCUDA() const {
+   c10::cuda::CUDACachingAllocator::init(num_devices);
+   at::cuda::detail::init_p2p_access_cache(num_devices);
+ 
++  at::cuda::EventManager::initEventManager(num_devices);
 +
-+  if (self.is_cuda() && self.is_pinned())
-+    return;
-+  if (new_ptr == old_ptr) {
-+    return;
+ #if AT_MAGMA_ENABLED()
+   TORCH_INTERNAL_ASSERT(magma_init_fn != nullptr, "Cannot initialize magma, init routine not set");
+   magma_init_fn();
+diff --git a/aten/src/ATen/native/Memory.cpp b/aten/src/ATen/native/Memory.cpp
+index 2b66f089339..467dc4991cb 100644
+--- a/aten/src/ATen/native/Memory.cpp
++++ b/aten/src/ATen/native/Memory.cpp
+@@ -8,8 +8,10 @@
+ #else
+ #include <ATen/ops/_debug_has_internal_overlap_native.h>
+ #include <ATen/ops/_pin_memory.h>
++#include <ATen/ops/_cuda_host.h>
+ #include <ATen/ops/is_pinned_native.h>
+ #include <ATen/ops/pin_memory_native.h>
++#include <ATen/ops/cuda_host_native.h>
+ #endif
+ 
+ namespace at {
+@@ -37,5 +39,12 @@ Tensor pin_memory(const Tensor& self, c10::optional<Device> device) {
+   return at::_pin_memory(self, device);
+ }
+ 
++Tensor cuda_host(const Tensor& self, c10::optional<Device> device) {
++  if (self.is_pinned() && self.device().is_cuda()) {
++    return self;
 +  }
-+
-+  c10::cuda::CUDAStream stream = c10::cuda::getCurrentCUDAStream();
-+  recordEvent(self, tensor, device.index(), stream);
++  return at::_cuda_host(self, device);
 +}
 +
-+Tensor& sync_device_(Tensor& self, Device device) {
-+  if (self.is_cuda() && self.is_pinned())
-+    return self;
-+
-+  c10::cuda::CUDAStream stream = c10::cuda::getCurrentCUDAStream();
-+  syncEvent(self.data_ptr(), device.index(), self.device().index(), stream);
-+  return self;
-+}
-+
-+Tensor& sync_tensor_(Tensor& self, const Tensor& tensor) {
-+  if (self.is_cuda() && self.is_pinned())
-+    return self;
-+  if (!tensor.is_cuda())
-+    return self;
-+
-+  c10::cuda::CUDAStream stream = c10::cuda::getCurrentCUDAStream();
-+  syncEvent(self.data_ptr(), tensor.device().index(), self.device().index(), stream);
-+  return self;
-+}
-+
-+}
-+}
+ }
+ }
 diff --git a/aten/src/ATen/native/cuda/Copy.cu b/aten/src/ATen/native/cuda/Copy.cu
-index 49564ff5a9..946d9a3771 100644
+index 3525d85f513..d4b616bfd27 100644
 --- a/aten/src/ATen/native/cuda/Copy.cu
 +++ b/aten/src/ATen/native/cuda/Copy.cu
-@@ -39,19 +39,21 @@ void copy_device_to_device(TensorIterator& iter, bool non_blocking) {
-   // cudaMemcpyAsync on the default stream.
-   CUDAStream copy_stream = getCurrentCUDAStream(src_device.index());
-   if (src_device != dst_device) {
--    // This is a cross-device copy on the src current stream and dst current
--    // stream. We perform a two-way barrier between both devices' streams
--    // before the copy. This ensures that any write-after-write and
--    // write-after-read dependencies on the destination side are handled, so
--    // that no one is operating on the dst memory when we perform the copy.
--    // src waits on dst barrier (src already waits on src)
+@@ -77,12 +77,14 @@ void copy_device_to_device(TensorIterator& iter,
+     // write-after-read dependencies on the destination side are handled, so
+     // that no one is operating on the dst memory when we perform the copy.
+     // src waits on dst barrier (src already waits on src)
 -    CUDAEvent dst_ready;
 -    device_guard.set_device(dst_device);
 -    dst_ready.record(getCurrentCUDAStream(dst_device.index()));
--
++    if (!non_blocking) {
++      CUDAEvent dst_ready;
++      device_guard.set_device(dst_device);
++      dst_ready.record(getCurrentCUDAStream(dst_device.index()));
+ 
 -    device_guard.set_device(src_device);
 -    dst_ready.block(copy_stream);
--  }
-+		if (!non_blocking) {
-+			// This is a cross-device copy on the src current stream and dst current
-+			// stream. We perform a two-way barrier between both devices' streams
-+			// before the copy. This ensures that any write-after-write and
-+			// write-after-read dependencies on the destination side are handled, so
-+			// that no one is operating on the dst memory when we perform the copy.
-+			// src waits on dst barrier (src already waits on src)
-+			CUDAEvent dst_ready;
-+			device_guard.set_device(dst_device);
-+			dst_ready.record(getCurrentCUDAStream(dst_device.index()));
-+
-+			device_guard.set_device(src_device);
-+			dst_ready.block(copy_stream);
-+		}
-+	}
- 
-   if (memcpy_eligible) {
-     void *dst = iter.data_ptr(0);
-@@ -79,15 +81,17 @@ void copy_device_to_device(TensorIterator& iter, bool non_blocking) {
++      device_guard.set_device(src_device);
++      dst_ready.block(copy_stream);
++    }
    }
  
-   if (src_device != dst_device) {
--    // dst waits on src barrier (dst already waits on dst). We cannot
--    // operate on dst's copy until the copy is complete.
-+		if (!non_blocking) {
-+			// dst waits on src barrier (dst already waits on dst). We cannot
-+			// operate on dst's copy until the copy is complete.
+   if (memcpy_eligible) {
+@@ -121,11 +123,13 @@ void copy_device_to_device(TensorIterator& iter,
+     // operate on dst's copy until the copy is complete.
  
--    // Still on src_device, record stream event
+     // Still on src_device, record stream event
 -    CUDAEvent src_ready;
 -    src_ready.record(copy_stream);
-+			// Still on src_device, record stream event
-+			CUDAEvent src_ready;
-+			src_ready.record(copy_stream);
++    if (!non_blocking) {
++      CUDAEvent src_ready;
++      src_ready.record(copy_stream);
  
 -    device_guard.set_device(dst_device);
 -    src_ready.block(getCurrentCUDAStream(dst_device.index()));
-+			device_guard.set_device(dst_device);
-+			src_ready.block(getCurrentCUDAStream(dst_device.index()));
-+		}
++      device_guard.set_device(dst_device);
++      src_ready.block(getCurrentCUDAStream(dst_device.index()));
++    }
    }
  
    AT_CUDA_CHECK(cudaGetLastError());
-diff --git a/aten/src/ATen/native/cudnn/Conv_v7.cpp b/aten/src/ATen/native/cudnn/Conv_v7.cpp
-index dc61faea53..49adc737f0 100644
---- a/aten/src/ATen/native/cudnn/Conv_v7.cpp
-+++ b/aten/src/ATen/native/cudnn/Conv_v7.cpp
-@@ -115,12 +115,25 @@ struct BenchmarkCache {
-     std::lock_guard<std::mutex> guard(mutex);
-     map[params] = results;
-   }
-+
-+  void clear() {
-+    std::lock_guard<std::mutex> guard(mutex);
-+    map.clear();
-+  }
- };
- 
- BenchmarkCache<cudnnConvolutionFwdAlgoPerf_t> fwd_algos;
- BenchmarkCache<cudnnConvolutionBwdDataAlgoPerf_t> bwd_data_algos;
- BenchmarkCache<cudnnConvolutionBwdFilterAlgoPerf_t> bwd_filter_algos;
- 
-+bool clear_benchmark() {
-+  fwd_algos.clear();
-+  bwd_data_algos.clear();
-+  bwd_filter_algos.clear();
-+
-+  return true;
-+}
-+
- // TODO: Stop manually allocating CUDA memory; allocate an ATen byte
- // tensor instead.
- struct Workspace {
-@@ -506,6 +519,8 @@ public:
-     }
- 
-     auto perfResults = only_use_default ? onlyDefaultAlgorithm(args) : search::findAlgorithms(args, benchmark);
-+    //print_performance(std::cout, args.params, perfResults);
-+
-     for (auto &algoPerf : perfResults) {
-       try {
-         f(algoPerf);
-@@ -519,6 +534,45 @@ public:
-     }
-     TORCH_CHECK(false, "Unable to find a valid cuDNN algorithm to run convolution");
-   }
-+
-+  void print_performance(std::ostream& out, const ConvolutionParams& params, const std::vector<perf_t>& results) {
-+    std::string partial_dtype;
-+    switch (params.dataType) {
-+      case CUDNN_DATA_FLOAT: partial_dtype = "float"; break;
-+      case CUDNN_DATA_DOUBLE: partial_dtype = "double"; break;
-+      case CUDNN_DATA_HALF: partial_dtype = "half"; break;
-+      default: partial_dtype = "unsupported";
-+    }
-+
-+    const std::string full_dtype = "torch." + partial_dtype;
-+    const int out_channels = params.weight_size[0];
-+    const int in_channels = params.weight_size[1] * params.groups;
-+    const size_t dim = params.input_dim;
-+    const std::string channels_last_xd = dim == 4 ? "channels_last" : "channels_last_3d";
-+    const std::string to_channels_last =
-+      ((params.memory_format == at::MemoryFormat::ChannelsLast) || (params.memory_format == at::MemoryFormat::ChannelsLast3d)) \
-+      ? ".to(memory_format=torch." + channels_last_xd + ")" : "";
-+
-+    out << "data = torch.randn(" << ArrayRef<int>(params.input_size, dim) << ", dtype=" << full_dtype << ", ";
-+    out <<   "device='cuda', requires_grad=True)" << to_channels_last << "\n";
-+    out << "net = torch.nn.Conv" << dim-2 << "d(" << in_channels << ", " << out_channels << ", ";
-+    out <<   "kernel_size=" << ArrayRef<int>(&params.weight_size[2], dim - 2) << ", ";
-+    out <<   "padding=" << ArrayRef<int>(params.padding, dim-2) << ", ";
-+    out <<   "stride=" << ArrayRef<int>(params.stride, dim-2) << ", ";
-+    out <<   "dilation=" << ArrayRef<int>(params.dilation, dim-2) << ", ";
-+    out <<   "groups=" << params.groups << ")\n";
-+
-+    for (int i = 0; i < CUDNN_CONVOLUTION_FWD_ALGO_COUNT; i++) {
-+      auto it = find_if(results.begin(), results.end(), [&i](const perf_t& obj) {return obj.algo == i; });
-+      if (it == results.end()) {
-+        out << i << ": None\n";
-+      }
-+      else {
-+        out <<  i << ": " << it->time << " ms\n";
-+      }
-+    }
-+    out << "pick: " << results[0].algo << "\n";
-+  }
- };
- 
- inline Tensor allocate_workspace(size_t size, const Tensor &other) {
 diff --git a/aten/src/ATen/native/native_functions.yaml b/aten/src/ATen/native/native_functions.yaml
-index 741981c9cb..893d241292 100644
+index b1658fb125b..2285a04ec7b 100644
 --- a/aten/src/ATen/native/native_functions.yaml
 +++ b/aten/src/ATen/native/native_functions.yaml
-@@ -3158,6 +3158,18 @@
- - func: pin_memory(Tensor(a) self) -> Tensor(a)
-   variants: method
+@@ -4354,6 +4354,34 @@
+     MPS: _pin_memory_mps
+   autogen: _pin_memory.out
  
-+- func: cuda_host(Tensor(a) self) -> Tensor(a)
++- func: cuda_host(Tensor(a) self, Device? device=None) -> Tensor(a)
 +  variants: method
++
++- func: _cuda_host(Tensor self, Device? device=None) -> Tensor
++  dispatch:
++    CUDA: _cuda_host_cuda
++
++- func: record_tensor(Tensor(a!) self, Tensor old, Device device) -> ()
++  variants: function, method
 +
 +- func: sync_device_(Tensor(a!) self, Device device) -> Tensor(a!)
 +  variants: function, method
@@ -343,280 +211,69 @@ index 741981c9cb..893d241292 100644
 +- func: sync_tensor_(Tensor(a!) self, Tensor tensor) -> Tensor(a!)
 +  variants: function, method
 +
-+- func: record_tensor(Tensor(a!) self, Tensor old, Device device) -> ()
++- func: _record_event(Tensor(a!) self, Tensor tensor, Device device) -> ()
 +  variants: function, method
++  device_check: NoCheck
++  dispatch:
++    CUDA: _record_event_cuda
++
++- func: _sync_event(Tensor(a!) self, Device device, Device cur_deivce) -> ()
++  variants: function, method
++  device_check: NoCheck
++  dispatch:
++    CUDA: _sync_event_cuda
 +
  - func: pinverse(Tensor self, float rcond=1e-15) -> Tensor
    variants: function, method
  
-@@ -9913,3 +9925,5 @@
- - func: unflatten_dense_tensors(Tensor flat, Tensor[] tensors) -> Tensor[]
-   variants: function
-   python_module: nn
-+
-+- func: clear_benchmark() -> bool
-diff --git a/aten/src/THC/CMakeLists.txt b/aten/src/THC/CMakeLists.txt
-index 085b4f5dfc..3db3c6b141 100644
---- a/aten/src/THC/CMakeLists.txt
-+++ b/aten/src/THC/CMakeLists.txt
-@@ -39,6 +39,7 @@ set(ATen_CUDA_SRCS ${ATen_CUDA_SRCS}
-   ${CMAKE_CURRENT_SOURCE_DIR}/THCGeneral.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/THCStorageCopy.cpp
-   ${CMAKE_CURRENT_SOURCE_DIR}/THCTensor.cpp
-+	${CMAKE_CURRENT_SOURCE_DIR}/THCTensorSync.cpp
+diff --git a/aten/src/ATen/templates/RegisterBackendSelect.cpp b/aten/src/ATen/templates/RegisterBackendSelect.cpp
+index 6463701a493..9bd181c1641 100644
+--- a/aten/src/ATen/templates/RegisterBackendSelect.cpp
++++ b/aten/src/ATen/templates/RegisterBackendSelect.cpp
+@@ -12,6 +12,9 @@
+ #include <ATen/Operators.h>
+ #else
+ #include <ATen/ops/is_pinned_ops.h>
++#include <ATen/ops/_cuda_host_ops.h>
++#include <ATen/ops/_record_event_ops.h>
++#include <ATen/ops/_sync_event_ops.h>
+ #include <ATen/ops/_pin_memory_ops.h>
  
-   ${CMAKE_CURRENT_SOURCE_DIR}/THCReduceApplyUtils.cu
-   ${CMAKE_CURRENT_SOURCE_DIR}/THCSleep.cu
-@@ -103,6 +104,7 @@ install(FILES
-           THCTensorTypeUtils.cuh
-           THCTensorMathMagma.cuh
-           THCThrustAllocator.cuh
-+					THCTensorSync.h
-           # See Note [TH abstraction violation]
-           THCTensor.hpp
-           THCStorage.hpp
-diff --git a/aten/src/THC/THCCachingHostAllocator.cpp b/aten/src/THC/THCCachingHostAllocator.cpp
-index 57c6398b84..55b5e0025d 100644
---- a/aten/src/THC/THCCachingHostAllocator.cpp
-+++ b/aten/src/THC/THCCachingHostAllocator.cpp
-@@ -287,3 +287,22 @@ static THCCachingHostAllocator thc_caching_host_allocator;
- at::Allocator* getTHCCachingHostAllocator() {
-   return &thc_caching_host_allocator;
+ ${ops_headers}
+@@ -39,10 +42,28 @@ at::Tensor _pin_memory(const Tensor& self, c10::optional<at::Device> device) {
+   return at::_ops::_pin_memory::redispatch(_dk, self, device);
  }
-+
-+struct THCCachingCUDAHostAllocator final : public at::Allocator {
-+  at::DataPtr allocate(size_t size) const override {
-+    THAssert(size >= 0);
-+    int device;
-+    THCudaCheck(cudaGetDevice(&device));
-+    void *ptr;
-+    THCudaCheck(allocator.malloc(&ptr, size));
-+    return {ptr, ptr, &THCCachingHostDeleter, at::Device(at::DeviceType::CUDA, device)};
-+  }
-+  at::DeleterFnPtr raw_deleter() const override {
-+    return &THCCachingHostDeleter;
-+  }
-+};
-+
-+static THCCachingCUDAHostAllocator thc_caching_cuda_host_allocator;
-+at::Allocator* getTHCCachingCUDAHostAllocator() {
-+  return &thc_caching_cuda_host_allocator;
-+}
-diff --git a/aten/src/THC/THCCachingHostAllocator.h b/aten/src/THC/THCCachingHostAllocator.h
-index b783a6e0d2..40aaa588a8 100644
---- a/aten/src/THC/THCCachingHostAllocator.h
-+++ b/aten/src/THC/THCCachingHostAllocator.h
-@@ -22,6 +22,7 @@
- // blocks, unlike the caching device allocator.
- //
- TORCH_CUDA_CPP_API c10::Allocator* getTHCCachingHostAllocator(void);
-+TORCH_CUDA_CPP_API c10::Allocator* getTHCCachingCUDAHostAllocator(void);
  
- // Records an event in the specified stream. The allocation 'ptr' will not be
- // re-used until the event has occurred.
-diff --git a/aten/src/THC/THCGeneral.cpp b/aten/src/THC/THCGeneral.cpp
-index c25dac101b..34906bb9b5 100644
---- a/aten/src/THC/THCGeneral.cpp
-+++ b/aten/src/THC/THCGeneral.cpp
-@@ -3,6 +3,7 @@
- #include <THC/THCAllocator.h>
- #include <THC/THCCachingHostAllocator.h>
- #include <THC/THCGeneral.hpp>
-+#include <THC/THCTensorSync.h>
- 
- #include <c10/cuda/CUDAFunctions.h>
- #include <c10/cuda/CUDAStream.h>
-@@ -41,7 +42,11 @@ THCState* THCState_alloc(void)
- void THCudaInit(THCState* state)
- {
-   if (!state->cudaHostAllocator) {
--    state->cudaHostAllocator = getTHCCachingHostAllocator();
-+    state->cudaHostAllocator = getTHCCachingCUDAHostAllocator();
-+  }
-+
-+  if (!state->hostAllocator) {
-+    state->hostAllocator = getTHCCachingHostAllocator();
-   }
- 
-   // We want to throw if there are no GPUs
-@@ -50,6 +55,8 @@ void THCudaInit(THCState* state)
- 
-   c10::cuda::CUDACachingAllocator::init(numDevices);
- 
-+  initEventManager(numDevices);
-+
-   int device = 0;
-   THCudaCheck(cudaGetDevice(&device));
- 
-diff --git a/aten/src/THC/THCGeneral.hpp b/aten/src/THC/THCGeneral.hpp
-index fd3bea2f5c..f0480b6976 100644
---- a/aten/src/THC/THCGeneral.hpp
-+++ b/aten/src/THC/THCGeneral.hpp
-@@ -13,6 +13,8 @@ struct THCState {
-   // NB: cudaHostAllocator MUST implement maybeGlobalBoundDeleter, because we have
-   // a few use-cases where we need to do raw allocations with them (for Thrust).
-   // TODO: Make this statically obvious
-+
-+	at::Allocator* hostAllocator;
-   at::Allocator* cudaHostAllocator;
- 
-   /* Table of enabled peer-to-peer access between directed pairs of GPUs.
-diff --git a/aten/src/THC/THCTensorSync.cpp b/aten/src/THC/THCTensorSync.cpp
-new file mode 100644
-index 0000000000..4f2b17577c
---- /dev/null
-+++ b/aten/src/THC/THCTensorSync.cpp
-@@ -0,0 +1,122 @@
-+#include <ATen/core/Tensor.h>
-+#include <THC/THCTensorSync.h>
-+#include <c10/cuda/CUDAStream.h>
-+
-+#include <cuda_runtime_api.h>
-+#include <map>
-+#include <mutex>
-+#include <condition_variable>
-+#include <iostream>
-+
-+struct DeviceEventManager {
-+ public:
-+  DeviceEventManager(int device) : device(device) {};
-+
-+  void recordEvent(at::Tensor& src, const at::Tensor& dst, at::cuda::CUDAStream stream) {
-+    {
-+      std::lock_guard<std::mutex> lock(mutex);
-+      void *src_ptr = src.data_ptr();
-+      void *dst_ptr;
-+
-+      src.set_data(dst);
-+
-+      dst_ptr = src.data_ptr();
-+
-+      cudaEvent_t event = createCudaEvent();
-+      C10_CUDA_CHECK(cudaEventRecord(event, stream));
-+
-+      // Deletes items that already exist.
-+      auto it = recorded_event_map.find(src_ptr);
-+      recorded_event_map[src_ptr] = {dst_ptr, event};
-+
-+      it = recorded_event_map.find(dst_ptr);
-+      recorded_event_map[dst_ptr] = {src_ptr, event};
-+
-+    }
-+    cv.notify_all();
-+  }
-+
-+  void syncEvent(void* ptr, at::cuda::CUDAStream stream, bool same_device) {
-+    cudaEvent_t event;
-+    {
-+      std::unique_lock<std::mutex> lock(mutex);
-+      auto it = recorded_event_map.find(ptr);
-+      if (it == recorded_event_map.end()) {
-+        if (same_device) {
-+          return;
-+        }
-+        cv.wait(lock, [&] {
-+            auto _it = this->recorded_event_map.find(ptr);
-+            return _it != this->recorded_event_map.end();
-+            });
-+        it = recorded_event_map.find(ptr);
-+      }
-+
-+      event = it->second.second;
-+      void* linked_ptr = it->second.first;
-+      recorded_event_map.erase(it);
-+      it = recorded_event_map.find(linked_ptr);
-+      if (it != recorded_event_map.end()) {
-+        recorded_event_map.erase(it);
-+      }
-+    }
-+
-+    //C10_CUDA_CHECK(cudaEventSynchronize(event));
-+    //freeCudaEvent(event);
-+    C10_CUDA_CHECK(cudaStreamWaitEvent(stream, event, 0));
-+  }
-+
-+  cudaEvent_t createCudaEvent() {
-+    cudaEvent_t event;
-+    C10_CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
-+
-+    return event;
-+  }
-+
-+  void freeCudaEvent(cudaEvent_t event) {
-+    C10_CUDA_CHECK(cudaEventDestroy(event));
-+  }
-+
-+  std::mutex mutex;
-+  std::condition_variable cv;
-+  int device;
-+  std::map<void*, std::pair<void*, cudaEvent_t>> recorded_event_map;
-+};
-+
-+struct EventManager {
-+ public:
-+  void init(int device_count) {
-+    int size = device_event_managers.size();
-+    if (size < device_count) {
-+      device_event_managers.resize(device_count);
-+      for (int i = 0; i < device_count; i++) {
-+        device_event_managers[i] = std::unique_ptr<DeviceEventManager>(
-+            new DeviceEventManager(i));
-+      }
-+    }
-+  }
-+
-+  void recordEvent(at::Tensor& src, const at::Tensor& dst, int device, at::cuda::CUDAStream stream) {
-+    device_event_managers[device]->recordEvent(src, dst, stream);
-+  }
-+
-+  void syncEvent(void* ptr, int device, int cur_device, at::cuda::CUDAStream stream) {
-+    device_event_managers[device]->syncEvent(ptr, stream, device == cur_device);
-+  }
-+
-+  std::vector<std::unique_ptr<DeviceEventManager>> device_event_managers;
-+};
-+
-+static EventManager event_manager;
-+
-+void initEventManager(int device_count) {
-+  event_manager.init(device_count);
++at::Tensor _cuda_host(const Tensor& self, c10::optional<at::Device> device) {
++  DispatchKeySet _dk = c10::DispatchKeySet(c10::computeDispatchKey(c10::nullopt, self.layout(), at::kCUDA));
++  return at::_ops::_cuda_host::redispatch(_dk, self, device);
 +}
 +
-+void recordEvent(at::Tensor& self, const at::Tensor& tensor, int device, at::cuda::CUDAStream stream) {
-+  event_manager.recordEvent(self, tensor, device, stream);
++void _record_event(Tensor& self, const Tensor& tensor, at::Device device) {
++  DispatchKeySet _dk = c10::DispatchKeySet(c10::computeDispatchKey(c10::nullopt, self.layout(), at::kCUDA));
++  at::_ops::_record_event::redispatch(_dk, self, tensor, device);
 +}
 +
-+void syncEvent(void* ptr, int device, int cur_device, at::cuda::CUDAStream stream) {
-+  event_manager.syncEvent(ptr, device, cur_device, stream);
++void _sync_event(Tensor& self, at::Device src, at::Device dst) {
++  DispatchKeySet _dk = c10::DispatchKeySet(c10::computeDispatchKey(c10::nullopt, self.layout(), at::kCUDA));
++  at::_ops::_sync_event::redispatch(_dk, self, src, dst);
 +}
-diff --git a/aten/src/THC/THCTensorSync.h b/aten/src/THC/THCTensorSync.h
-new file mode 100644
-index 0000000000..3362a3a76b
---- /dev/null
-+++ b/aten/src/THC/THCTensorSync.h
-@@ -0,0 +1,17 @@
-+#ifndef THC_TENSOR_SYNC_INC
-+#define THC_TENSOR_SYNC_INC
 +
-+#include <THC/THCGeneral.h>
-+#include <c10/cuda/CUDAStream.h>
-+#include <ATen/core/Tensor.h>
-+
-+TORCH_CUDA_CPP_API void
-+recordEvent(at::Tensor& src, const at::Tensor& dst, int device, at::cuda::CUDAStream stream);
-+
-+TORCH_CUDA_CPP_API void
-+syncEvent(void* ptr, int device, int cur_device, at::cuda::CUDAStream stream);
-+
-+TORCH_CUDA_CPP_API void
-+initEventManager(int device_count);
-+
-+#endif
+ TORCH_LIBRARY_IMPL(aten, BackendSelect, m) {
+   ${backend_select_function_registrations};
+   m.impl(TORCH_SELECTIVE_NAME("aten::is_pinned"), TORCH_FN(is_pinned));
+   m.impl(TORCH_SELECTIVE_NAME("aten::_pin_memory"), TORCH_FN(_pin_memory));
++  m.impl(TORCH_SELECTIVE_NAME("aten::_cuda_host"), TORCH_FN(_cuda_host));
++  m.impl(TORCH_SELECTIVE_NAME("aten::_record_event"), TORCH_FN(_record_event));
++  m.impl(TORCH_SELECTIVE_NAME("aten::_sync_event"), TORCH_FN(_sync_event));
+ }
+ 
+ } // namespace
 diff --git a/torch/csrc/jit/api/module.cpp b/torch/csrc/jit/api/module.cpp
-index a2a55d1436..a4fc39d88d 100644
+index 19f67e2f54d..40895de8f38 100644
 --- a/torch/csrc/jit/api/module.cpp
 +++ b/torch/csrc/jit/api/module.cpp
-@@ -181,6 +181,98 @@ void Module::to(at::Device device, bool non_blocking) {
+@@ -165,6 +165,91 @@ void Module::to(at::Device device, bool non_blocking) {
    to_impl(device, /*dtype=*/c10::nullopt, non_blocking);
  }
  
@@ -662,13 +319,6 @@ index a2a55d1436..a4fc39d88d 100644
 +      e.value.sync_device_(device);
 +    }
 +  }
-+
-+//  for (at::Tensor e : parameters()) {
-+//    e.sync_device_(device);
-+//  }
-+//  for (at::Tensor e : buffers()) {
-+//    e.sync_device_(device);
-+//  }
 +}
 +
 +void Module::pin_memory() {
@@ -712,14 +362,14 @@ index a2a55d1436..a4fc39d88d 100644
 +  }
 +}
 +
- void module_state_to(
+ static void module_state_to(
      const autograd::Variable& variable,
      const c10::optional<at::Device>& device,
 diff --git a/torch/csrc/jit/api/module.h b/torch/csrc/jit/api/module.h
-index 494089839a..35afbaafd6 100644
+index 570ce12d1fa..4053c8a92d5 100644
 --- a/torch/csrc/jit/api/module.h
 +++ b/torch/csrc/jit/api/module.h
-@@ -212,6 +212,18 @@ struct TORCH_API Module : public Object {
+@@ -214,6 +214,18 @@ struct TORCH_API Module : public Object {
    /// effect.
    void to(at::Device device, bool non_blocking = false);
  
@@ -738,38 +388,31 @@ index 494089839a..35afbaafd6 100644
    void save(
        std::ostream& out,
        const ExtraFilesMap& extra_files = ExtraFilesMap()) const;
-diff --git a/torch/csrc/jit/runtime/interpreter.cpp b/torch/csrc/jit/runtime/interpreter.cpp
-index cfdb641fc4..fc87f80dca 100644
---- a/torch/csrc/jit/runtime/interpreter.cpp
-+++ b/torch/csrc/jit/runtime/interpreter.cpp
-@@ -246,10 +246,10 @@ struct InterpreterStateImpl : c10::intrusive_ptr_target {
-             push(stack, IValue());
-             runGraphFunction(stack, &f);
-           } break;
--          case OP:
-+          case OP: {
-             frame.function->operator_table_[inst.X](&stack);
-             ++frame.pc;
--            break;
-+          } break;
-           case OPN:
-             stack.push_back(inst.N);
-             frame.function->operator_table_[inst.X](&stack);
 diff --git a/torch/nn/modules/module.py b/torch/nn/modules/module.py
-index 3739bb2c88..5f0f286b11 100644
+index 8fad7405450..f48f11bf104 100644
 --- a/torch/nn/modules/module.py
 +++ b/torch/nn/modules/module.py
-@@ -255,7 +255,9 @@ class Module:
+@@ -421,7 +421,9 @@ class Module:
  
-         self.training = True
-         self._parameters = OrderedDict()
-+        self._prev_parameters = OrderedDict()
-         self._buffers = OrderedDict()
-+        self._prev_buffers = OrderedDict()
-         self._non_persistent_buffers_set = set()
-         self._backward_hooks = OrderedDict()
-         self._is_full_backward_hook = None
-@@ -851,6 +853,18 @@ class Module:
+     training: bool
+     _parameters: Dict[str, Optional[Parameter]]
++    _prev_parameters: Dict[str, Optional[Parameter]]
+     _buffers: Dict[str, Optional[Tensor]]
++    _prev_buffers: Dict[str, Optional[Parameter]]
+     _non_persistent_buffers_set: Set[str]
+     _backward_pre_hooks: Dict[int, Callable]
+     _backward_hooks: Dict[int, Callable]
+@@ -472,7 +474,9 @@ class Module:
+         """
+         super().__setattr__('training', True)
+         super().__setattr__('_parameters', OrderedDict())
++        super().__setattr__('_prev_parameters', OrderedDict())
+         super().__setattr__('_buffers', OrderedDict())
++        super().__setattr__('_prev_buffers', OrderedDict())
+         super().__setattr__('_non_persistent_buffers_set', set())
+         super().__setattr__('_backward_pre_hooks', OrderedDict())
+         super().__setattr__('_backward_hooks', OrderedDict())
+@@ -1159,6 +1163,18 @@ class Module:
  
          return self._apply(convert)
  
@@ -785,6 +428,19 @@ index 3739bb2c88..5f0f286b11 100644
 +
 +        return self._apply(convert)
 +
-     def register_backward_hook(
-         self, hook: Callable[['Module', _grad_t, _grad_t], Union[None, Tensor]]
-     ) -> RemovableHandle:
+     def register_full_backward_pre_hook(
+         self,
+         hook: Callable[["Module", _grad_t], Union[None, _grad_t]],
+diff --git a/torchgen/native_function_generation.py b/torchgen/native_function_generation.py
+index afd04b5fb01..95fb7b6a6a6 100644
+--- a/torchgen/native_function_generation.py
++++ b/torchgen/native_function_generation.py
+@@ -44,6 +44,8 @@ MUTABLE_OPS_THAT_CANNOT_GET_AN_OUT_VARIANT = [
+     "_cummax_helper",
+     # should be out=?
+     "_cummin_helper",
++    "_record_event",
++    "_sync_event",
+ ]
+ 
+ # All of these operators don't have any tensor like returns

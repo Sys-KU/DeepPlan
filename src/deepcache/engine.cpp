@@ -101,7 +101,8 @@ class PCIeThread : public LoadThread {
 
 void Init(void) {
   n_device = torch::cuda::device_count();
-  torch::jit::getBailoutDepth() = 0;
+  torch::jit::FusionStrategy strat = {{torch::jit::FusionBehavior::DYNAMIC, 0}};
+  torch::jit::setFusionStrategy(strat);
 
   g_pcie_thrs.resize(n_device);
 
