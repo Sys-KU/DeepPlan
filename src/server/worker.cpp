@@ -103,13 +103,13 @@ void Worker::add_models(std::vector<std::string> model_names, int n_models,
   }
   size_t free;
   size_t total;
-  size_t padding_size = (size_t)(3.0 * (1 << 30)); // 2GB
+  float watermark = 0.95f;
   cudaError_t err = cudaMemGetInfo(&free, &total);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaMemGetInfo Error\n");
   }
-  capacity_ = free - padding_size;
-  std::cout << "capcity: " << capacity_ / 1024 / 1024 / 1024 << "\n";
+  capacity_ = size_t(free * watermark);
+  std::cout << "Available GPU memory: " << capacity_ / 1024 / 1024 / 1024 << " GB\n";
 }
 
 libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
