@@ -26,7 +26,7 @@ struct InferTask {
 
 class Worker {
  public:
-  Worker(int device);
+  Worker(int device, std::string name="");
   ~Worker();
 
   void run();
@@ -53,6 +53,8 @@ class Worker {
   void stop();
 
   at::Device device;
+
+  std::string name;
 
  private:
   size_t capacity_;

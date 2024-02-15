@@ -7,9 +7,13 @@
 #include <cuda_runtime_api.h>
 #include <c10/cuda/CUDACachingAllocator.h>
 
-Worker::Worker(int device)
+Worker::Worker(int device, std::string worker_name)
   : device(at::kCUDA, device),
+    name(worker_name),
     alive(true) {
+      if (name.empty()) {
+        name = "Worker" + std::to_string(device);
+      }
       worker_thr = std::thread(std::bind(&Worker::run, this));
       running_models = new util::LRUCache<int, libtorch::Model*>();
       partial_models_list = std::list<util::LRUCache<int, libtorch::Model*>*>(10);
@@ -86,10 +90,12 @@ void Worker::set_r_policy(ReclaimPolicy r_policy) {
 
 void Worker::add_models(std::vector<std::string> model_names, int n_models,
                         EngineType engine_type, std::vector<int> devices) {
+  auto progressbar = util::progressbar(n_models, name);
   if (model_manager) {
     for (int i = 0; i < n_models; i++) {
       auto model_name = model_names[i % model_names.size()];
       model_manager->add_model(model_name, devices);
+      progressbar.update();
     }
   }
   else {

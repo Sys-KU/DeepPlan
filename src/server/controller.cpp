@@ -87,7 +87,8 @@ void Controller::setup_models(std::vector<std::string> model_names, int n_models
       partitions[i] = p;
     }
 
-    std::cout << "Models setup...\n";
+    std::cout << "Setup total " << n_models << " new models with "
+              << n_workers << " workers\n";
     if ((model_names_ == model_names) &&
         (engine_type_ == engine_type) &&
         (mp_size_ == mp_size)) {

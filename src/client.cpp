@@ -185,7 +185,6 @@ void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
   }
 
   if (!(pass_model && pass_concurrency && pass_rate)) {
-    print_usage(argv[0]);
     fprintf(stderr, "[Error] the following arguments are required:");
     if (!pass_model)
       fprintf(stderr, " --model_name/-m");
@@ -228,9 +227,11 @@ void simple_experiment(ClientOptions* options) {
 
   auto result = workload->result(slo);
 
+  std::cout << "=======================================\n";
   std::cout << "99% Latency: " << result.latency_99 << " ms\n";
   std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
   std::cout << "Goodput Rate: " << result.goodput_rate << " %\n";
+  std::cout << "=======================================\n";
 
   if (!options->dump.empty()) {
     workload->dump(options->dump);

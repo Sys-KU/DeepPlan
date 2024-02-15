@@ -229,8 +229,9 @@ std::vector<ScriptModule> travel_layers(ScriptModule module, std::string name) {
   }
 }
 
-progressbar::progressbar(int n_cycles)
+progressbar::progressbar(int n_cycles, std::string desc)
   : n_cycles(n_cycles),
+    desc(desc),
     count(0) {
   int cols = 80;
 
@@ -245,6 +246,9 @@ progressbar::progressbar(int n_cycles)
 #endif /* TIOCGSIZE */
 
   std::stringstream stream;
+  if (!desc.empty()) {
+    stream << desc << ": ";
+  }
   stream << " 100 % [] " << n_cycles << "/" << n_cycles;
   int desc_size = stream.str().size();
 
@@ -256,7 +260,11 @@ progressbar::progressbar(int n_cycles)
 void progressbar::update(int n) {
   count = count + n;
   float rate = (float)count / n_cycles;
-  std::cout << "\r " << int(rate * 100) << "% [";
+  std::cout << "\r ";
+  if (!desc.empty()) {
+    std::cout << desc << ": ";
+  }
+  std::cout << "[";
   for (int i = 0; i < bar_width; i++) {
     if (i <= bar_width * rate) {
         std::cout << "#";
@@ -265,7 +273,8 @@ void progressbar::update(int n) {
         std::cout << " ";
     }
   }
-  std::cout << "] " << count << "/" << n_cycles;
+  std::cout << "] " << int(rate * 100) << "% "
+            << count << "/" << n_cycles;
   std::cout.flush();
 
   if (count >= n_cycles) {

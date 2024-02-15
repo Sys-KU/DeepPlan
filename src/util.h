@@ -178,9 +178,11 @@ class progressbar {
   public:
     progressbar() {};
 
-    progressbar(int n_cycles);
+    progressbar(int n_cycles, std::string desc = "");
 
     void update(int n = 1);
+
+    std::string desc = "";
 
   private:
     int n_cycles;
