@@ -2,13 +2,15 @@
 #include <server/worker.h>
 #include <network/session.h>
 #include <util.h>
+#include <options.h>
 #include <deepplan/engine.h>
 #include <deepcache/engine.h>
 
 #include <thread>
 
-Controller::Controller(network::MessageQueue& messages)
+Controller::Controller(network::MessageQueue& messages, const ServerOptions& options)
   : messages_(messages),
+    options_(options),
     alive(false) {init();};
 
 void Controller::init() {
@@ -21,7 +23,7 @@ void Controller::init() {
   int rank = torch::cuda::device_count();
   workers.resize(rank);
   for (int i = 0; i < workers.size(); i++) {
-    workers[i] = new Worker(i);
+    workers[i] = new Worker(i, options_);
   }
 }
 

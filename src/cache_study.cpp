@@ -1,8 +1,6 @@
 #include <iostream>
 #include <string>
 #include <stack>
-#include <unistd.h>
-#include <getopt.h>
 #include <torch/script.h>
 #include <c10/cuda/CUDAStream.h>
 #include <torch/cuda.h>
@@ -12,73 +10,8 @@
 #include <deepcache/model.h>
 #include <deepcache/engine.h>
 #include <util.h>
+#include <options.h>
 
-struct BenchmarkOptions {
-  std::string model_name;
-  bool verbose;
-  int batch_size;
-  int num_warmup;
-  int num_test;
-};
-
-static struct option long_options[] =
-{
-  {"verbose", no_argument,       0, 'v' },
-  {"help",    no_argument,       0, 'h' },
-  {"model",   required_argument, 0, 'm' },
-  {"batch",   required_argument, 0, 'b' },
-  {0,         0,                 0,  0  }
-};
-
-static void print_usage(char* program_name) {
-  fprintf(stderr,
-      "Usage : %s [-h] --model/-m MODEL_NAME\n"
-      "\t\t[--batch/-b BATCH_SIZE] [--verbose/-v]\n",
-      program_name);
-}
-
-void parseOptions(BenchmarkOptions** benchmark_options, int argc, char** argv) {
-  *benchmark_options = new BenchmarkOptions();
-  auto options = *benchmark_options;
-  char flag;
-
-  bool found = false;
-  bool pass_model = false;
-
-  options->num_warmup  = 20;
-  options->num_test    = 30;
-  options->batch_size  = 1;
-  options->verbose     = false;
-
-  while ((flag = getopt_long(argc, argv, "b:hm:v:", long_options, NULL)) != -1) { 
-    switch (flag) {
-      case 'h':
-        print_usage(argv[0]);
-        break;
-      case 'm':
-        pass_model = true;
-        options->model_name = std::string(optarg);
-        break;
-      case 'b':
-        options->batch_size = strtoul(optarg, NULL, 10);
-        break;
-      case 'v':
-        options->verbose = true;
-        break;
-      default:
-        print_usage(argv[0]);
-        exit(EXIT_FAILURE);
-        break;
-        bool found = false;
-    }
-  }
-
-  if (!pass_model) {
-    print_usage(argv[0]);
-    fprintf(stderr, "[Error] the following arguments are required: --model_name/-m\n");
-    exit(EXIT_FAILURE);
-  }
-}
 
 struct InferResult {
   InferResult(double latency, size_t load_size, int n_caches)
@@ -90,11 +23,11 @@ struct InferResult {
   int n_caches;
 };
 
-void benchmark(BenchmarkOptions* options) {
-  int num_warmup = options->num_warmup;
-  int num_test   = options->num_test;
-  int batch_size  = options->batch_size;
-  bool verbose_flag = options->verbose;
+void benchmark(CacheStudyOptions options) {
+  int num_warmup = options.num_warmup;
+  int num_test   = options.num_test;
+  int batch_size  = options.batch_size;
+  bool verbose_flag = options.verbose;
 
   at::Device target_device(at::kCUDA, 0);
 
@@ -104,12 +37,12 @@ void benchmark(BenchmarkOptions* options) {
     exit(EXIT_FAILURE);
   }
 
-  std::string model_path = std::string(model_repo) + "/" + options->model_name;
+  std::string model_path = std::string(model_repo) + "/" + options.model_name;
 
   torch::NoGradGuard no_grad;
 
   deepcache::Model* model = new deepcache::Model(
-                                            options->model_name,
+                                            options.model_name,
                                             model_path,
                                             target_device.index()
                                           );
@@ -117,7 +50,7 @@ void benchmark(BenchmarkOptions* options) {
   util::InputGenerator input_generator;
 
   ScriptModuleInput inputs;
-  input_generator.generate_input(options->model_name, batch_size, &inputs);
+  input_generator.generate_input(options.model_name, batch_size, &inputs);
 
   for (auto& input : inputs) {
     input = input.toTensor().to(model->target_device);
@@ -212,15 +145,15 @@ void benchmark(BenchmarkOptions* options) {
 }
 
 int main(int argc, char** argv) {
-  BenchmarkOptions* benchmark_options;
-  parseOptions(&benchmark_options, argc, argv);
+  CacheStudyOptions options;
+  options.parseOptions(argc, argv);
 
-  std::cout << "Caching Study " << benchmark_options->model_name << " "
-            << benchmark_options->batch_size << "-Batch\n";
+  std::cout << "Caching Study " << options.model_name << " "
+            << options.batch_size << "-Batch\n";
 
   deepcache::Init();
 
-  benchmark(benchmark_options);
+  benchmark(options);
 
   deepcache::Deinit();
 

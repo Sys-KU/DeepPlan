@@ -1,5 +1,7 @@
 #include <server/server.h>
 #include <signal.h>
+#include <options.h>
+
 
 class InterruptException : public std::exception
 {
@@ -14,6 +16,9 @@ void sig_to_exception(int s)
 }
 
 int main(int argc, char** argv) {
+  ServerOptions server_options;
+  server_options.parseOptions(argc, argv);
+
   {
     // setupt handling interrupt
     struct sigaction sigIntHandler;
@@ -25,7 +30,7 @@ int main(int argc, char** argv) {
 
   Server* server;
   try {
-    server = new Server(DEFAULT_PORT);
+    server = new Server(DEFAULT_PORT, server_options);
     server->run();
   }
   catch(InterruptException& e) {

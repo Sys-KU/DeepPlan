@@ -2,6 +2,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 set(DEEPPLAN_SRC
 		util.cpp
+    options.cpp
 		deepplan/model.cpp
 		deepplan/engine.cpp
 		libtorch/model.cpp
@@ -9,6 +10,7 @@ set(DEEPPLAN_SRC
 
 set(DEEPCACHE_SRC
 		util.cpp
+    options.cpp
 		deepcache/model.cpp
 		deepcache/engine.cpp
 		libtorch/model.cpp

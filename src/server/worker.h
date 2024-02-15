@@ -1,5 +1,6 @@
 #pragma once
 #include <util.h>
+#include <options.h>
 #include <network/session.h>
 #include <server/model_manager.h>
 #include <deepplan/model.h>
@@ -26,7 +27,7 @@ struct InferTask {
 
 class Worker {
  public:
-  Worker(int device, std::string name="");
+  Worker(int device, const ServerOptions& options, std::string name="");
   ~Worker();
 
   void run();
@@ -57,6 +58,7 @@ class Worker {
   std::string name;
 
  private:
+  const ServerOptions& options_;
   size_t capacity_;
   std::atomic_bool alive;
   std::thread worker_thr;

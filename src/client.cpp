@@ -1,213 +1,21 @@
 #include <iostream>
-#include <getopt.h>
 
 #include <client/workload.h>
 #include <client/azure.h>
 #include <util.h>
+#include <options.h>
 
-typedef enum {
-  SIMPLE = 0,
-  BURSTY,
-  AZURE,
-  SKEW,
-} WorkloadType;
 
-struct ClientOptions {
-  WorkloadType workload_type;
-  std::vector<std::string> model_names;
-  int concurrency;
-  int rate;
-  int mp_size;
-  EngineType engine_type;
-  ReclaimPolicy r_policy;
-  int slo;
-  std::string dump;
-  int n_warmup;
-  int n_test;
-};
+void simple_experiment(ClientOptions options) {
+  std::vector<std::string> model_names = options.model_names;
+  int concurrency = options.concurrency;
+  int rate = options.rate;
+  int mp_size = options.mp_size;
+  EngineType engine_type = options.engine_type;
+  ReclaimPolicy r_policy = options.r_policy;
+  int slo = options.slo;
 
-static struct option long_options[] =
-{
-  {"help",          no_argument,        0,  'h' },
-  {"workload",      required_argument,  0,  'w' },
-  {"model",         required_argument,  0,  'm' },
-  {"concurrency",   required_argument,  0,  'c' },
-  {"rate",          required_argument,  0,  'r' },
-  {"mp_size",       required_argument,  0,  'p' },
-  {"engine",        required_argument,  0,  'e' },
-  {"r_policy",      required_argument,  0,   0  },
-  {"slo",           required_argument,  0,  's' },
-  {"dump",          required_argument,  0,  'd' },
-  {0, 0, 0, 0}
-};
-
-static void print_usage(char* program_name) {
-  fprintf(stderr,
-      "Usage : %s [-h] --workload/-w WORKLOAD --model/-m MODEL_NAME\n"
-      "\t\t--concurrency/-c CONCURRENCY --rate/-r RATE [--mp_size/-p MP_SIZE]\n"
-      "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan,deepcache}]\n"
-      "\t\t[--r_policy {rr, balance}]\n"
-      "\t\t[--slo/-s SLO] [--dump/-d]\n",
-      program_name);
-}
-
-void parseOptions(ClientOptions** benchmark_options, int argc, char** argv) {
-  *benchmark_options = new ClientOptions();
-  auto options = *benchmark_options;
-  char flag;
-  int option_index = 0;
-
-  char engine_types[][20] = { "in_memory", "demand", "pipeline", "deepplan", "deepcache" };
-  char workload_types[][20] = { "simple", "bursty", "azure", "skew" };
-  char r_policies[][20] = { "rr", "balance" };
-  int n_engine_types = sizeof(engine_types) / 20;
-  int n_r_polices = sizeof(r_policies) / 20;
-  int n_workload_types = sizeof(workload_types) / 20;
-  bool found = false;
-  bool pass_model = false;
-  bool pass_concurrency = false;
-  bool pass_rate = false;
-
-  options->mp_size   = 1;
-  options->n_warmup  = 1000;
-  options->n_test    = 10000;
-  options->engine_type = EngineType::DEEPPLAN;
-  options->r_policy  = ReclaimPolicy::RR;
-  options->slo       = 100;
-  options->dump      = "";
-
-  while ((flag = getopt_long(argc, argv, "c:d:e:hm:r:s:w:p:", long_options, &option_index)) != -1) {
-    switch (flag) {
-      case 0:
-        if (long_options[option_index].flag != 0)
-          break;
-        if (long_options[option_index].name == "r_policy") {
-          found = false;
-          for (int i = 0; i < n_r_polices; i++) {
-            if (!strcmp(r_policies[i], optarg)) {
-              options->r_policy = ReclaimPolicy(i);
-              found = true;
-              break;
-            }
-          }
-
-          if (!found) {
-            print_usage(argv[0]);
-            fprintf(stderr, "[Error] argument --r_policy: invalid choice: %s (choose from",
-                optarg);
-            for (int i = 0; i < n_r_polices; i++) {
-              fprintf(stderr, " \'%s\'", r_policies[i]);
-            }
-            fprintf(stderr, ")\n");
-            exit(EXIT_FAILURE);
-          }
-        }
-        break;
-      case 'h':
-        print_usage(argv[0]);
-        break;
-      case 'm':
-        optind--;
-        {
-          std::vector<std::string> model_names;
-          for ( ; optind < argc && *argv[optind] != '-'; optind++) {
-            model_names.push_back(std::string(argv[optind]));
-          }
-          options->model_names = model_names;
-        }
-        pass_model = true;
-        break;
-      case 'c':
-        options->concurrency = (int)strtol(optarg, NULL, 10);
-        pass_concurrency = true;
-        break;
-      case 'd':
-        options->dump = std::string(optarg);
-        break;
-      case 'r':
-        options->rate = (int)strtol(optarg, NULL, 10);
-        pass_rate = true;
-        break;
-      case 'p':
-        options->mp_size = (int)strtol(optarg, NULL, 10);
-        break;
-      case 's':
-        options->slo = (int)strtol(optarg, NULL, 10);
-        break;
-      case 'e':
-        found = false;
-        for (int i = 0; i < n_engine_types; i++) {
-          if (!strcmp(engine_types[i], optarg)) {
-            options->engine_type = EngineType(i);
-            found = true;
-            break;
-          }
-        }
-
-        if (!found) {
-          print_usage(argv[0]);
-          fprintf(stderr, "[Error] argument --engine/-e: invalid choice: %s (choose from",
-              optarg);
-          for (int i = 0; i < n_engine_types; i++) {
-            fprintf(stderr, " \'%s\'", engine_types[i]);
-          }
-          fprintf(stderr, ")\n");
-          exit(EXIT_FAILURE);
-        }
-        break;
-      case 'w':
-        found = false;
-        for (int i = 0; i < n_workload_types; i++) {
-          if (!strcmp(workload_types[i], optarg)) {
-            options->workload_type = WorkloadType(i);
-            found = true;
-            break;
-          }
-        }
-
-        if (!found) {
-          print_usage(argv[0]);
-          fprintf(stderr, "[Error] argument --workload/-w: invalid choice: %s (choose from",
-              optarg);
-          for (int i = 0; i < n_workload_types; i++) {
-            fprintf(stderr, " \'%s\'", workload_types[i]);
-          }
-          fprintf(stderr, ")\n");
-          exit(EXIT_FAILURE);
-        }
-        break;
-      default:
-        print_usage(argv[0]);
-        exit(EXIT_FAILURE);
-        break;
-        bool found = false;
-    }
-  }
-
-  if (!(pass_model && pass_concurrency && pass_rate)) {
-    fprintf(stderr, "[Error] the following arguments are required:");
-    if (!pass_model)
-      fprintf(stderr, " --model_name/-m");
-    if (!pass_concurrency)
-      fprintf(stderr, " --concurrency/-c");
-    if (!pass_rate)
-      fprintf(stderr, " --rate/-r");
-
-    exit(EXIT_FAILURE);
-  }
-
-}
-
-void simple_experiment(ClientOptions* options) {
-  std::vector<std::string> model_names = options->model_names;
-  int concurrency = options->concurrency;
-  int rate = options->rate;
-  int mp_size = options->mp_size;
-  EngineType engine_type = options->engine_type;
-  ReclaimPolicy r_policy = options->r_policy;
-  int slo = options->slo;
-
-  int n_warmup = options->n_warmup;
+  int n_warmup = options.n_warmup;
   int n_test = rate * 100;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
@@ -233,21 +41,21 @@ void simple_experiment(ClientOptions* options) {
   std::cout << "Goodput Rate: " << result.goodput_rate << " %\n";
   std::cout << "=======================================\n";
 
-  if (!options->dump.empty()) {
-    workload->dump(options->dump);
+  if (!options.dump.empty()) {
+    workload->dump(options.dump);
   }
 }
 
-void skew_experiment(ClientOptions* options) {
-  std::vector<std::string> model_names = options->model_names;
-  int concurrency = options->concurrency;
-  int rate = options->rate;
-  int mp_size = options->mp_size;
-  EngineType engine_type = options->engine_type;
-  ReclaimPolicy r_policy = options->r_policy;
-  int slo = options->slo;
+void skew_experiment(ClientOptions options) {
+  std::vector<std::string> model_names = options.model_names;
+  int concurrency = options.concurrency;
+  int rate = options.rate;
+  int mp_size = options.mp_size;
+  EngineType engine_type = options.engine_type;
+  ReclaimPolicy r_policy = options.r_policy;
+  int slo = options.slo;
 
-  int n_warmup = options->n_warmup;
+  int n_warmup = options.n_warmup;
   int n_test = rate * 100;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
@@ -271,19 +79,19 @@ void skew_experiment(ClientOptions* options) {
   std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
   std::cout << "Goodput Rate: " << result.goodput_rate << " %\n";
 
-  if (!options->dump.empty()) {
-    workload->dump(options->dump);
+  if (!options.dump.empty()) {
+    workload->dump(options.dump);
   }
 }
 
-void bursty_experiment(ClientOptions* options) {
-  std::vector<std::string> model_names = options->model_names;
-  int concurrency = options->concurrency;
-  int rate = options->rate;
-  int mp_size = options->mp_size;
-  int slo = options->slo;
-  EngineType engine_type = options->engine_type;
-  ReclaimPolicy r_policy = options->r_policy;
+void bursty_experiment(ClientOptions options) {
+  std::vector<std::string> model_names = options.model_names;
+  int concurrency = options.concurrency;
+  int rate = options.rate;
+  int mp_size = options.mp_size;
+  int slo = options.slo;
+  EngineType engine_type = options.engine_type;
+  ReclaimPolicy r_policy = options.r_policy;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
                                       r_policy, mp_size, "127.0.0.1", "4321");
@@ -313,15 +121,15 @@ void bursty_experiment(ClientOptions* options) {
   }
 }
 
-void azure_experiment(ClientOptions* options) {
-  std::vector<std::string> model_names = options->model_names;
-  int concurrency = options->concurrency;
-  int rate = options->rate;
-  int mp_size = options->mp_size;
-  EngineType engine_type = options->engine_type;
-  ReclaimPolicy r_policy = options->r_policy;
+void azure_experiment(ClientOptions options) {
+  std::vector<std::string> model_names = options.model_names;
+  int concurrency = options.concurrency;
+  int rate = options.rate;
+  int mp_size = options.mp_size;
+  EngineType engine_type = options.engine_type;
+  ReclaimPolicy r_policy = options.r_policy;
 
-  int slo = options->slo;
+  int slo = options.slo;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
                                       r_policy, mp_size, "127.0.0.1", "4321");
@@ -356,21 +164,21 @@ void azure_experiment(ClientOptions* options) {
 
 
 int main(int argc, char** argv) {
-  ClientOptions* client_options;
-  parseOptions(&client_options, argc, argv);
+  ClientOptions client_options;
+  client_options.parseOptions(argc, argv);
 
   try {
-    switch (client_options->workload_type) {
-      case WorkloadType::SIMPLE:
+    switch (client_options.workload_type) {
+      case ClientOptions::WorkloadType::SIMPLE:
         simple_experiment(client_options);
         break;
-      case WorkloadType::BURSTY:
+      case ClientOptions::WorkloadType::BURSTY:
         bursty_experiment(client_options);
         break;
-      case WorkloadType::AZURE:
+      case ClientOptions::WorkloadType::AZURE:
         azure_experiment(client_options);
         break;
-      case WorkloadType::SKEW:
+      case ClientOptions::WorkloadType::SKEW:
         skew_experiment(client_options);
     }
   }

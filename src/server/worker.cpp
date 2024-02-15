@@ -1,5 +1,6 @@
 #include <torch/cuda.h>
 #include <util.h>
+#include <options.h>
 #include <server/worker.h>
 #include <server/model_manager.h>
 #include <deepplan/model.h>
@@ -7,9 +8,10 @@
 #include <cuda_runtime_api.h>
 #include <c10/cuda/CUDACachingAllocator.h>
 
-Worker::Worker(int device, std::string worker_name)
+Worker::Worker(int device, const ServerOptions& options, std::string worker_name)
   : device(at::kCUDA, device),
     name(worker_name),
+    options_(options),
     alive(true) {
       if (name.empty()) {
         name = "Worker" + std::to_string(device);
@@ -103,12 +105,11 @@ void Worker::add_models(std::vector<std::string> model_names, int n_models,
   }
   size_t free;
   size_t total;
-  float watermark = 0.95f;
   cudaError_t err = cudaMemGetInfo(&free, &total);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaMemGetInfo Error\n");
   }
-  capacity_ = size_t(free * watermark);
+  capacity_ = size_t(free * options_.watermark);
   std::cout << "Available GPU memory: " << capacity_ / 1024 / 1024 / 1024 << " GB\n";
 }
 

@@ -3,6 +3,7 @@
 #include <network/session.h>
 #include <network/message.h>
 #include <server/controller.h>
+#include <options.h>
 
 #include <server_api.h>
 #include <boost/asio.hpp>
@@ -14,7 +15,7 @@
 
 class Server {
  public:
-  Server(int port);
+  Server(int port, const ServerOptions& options);
 
   ~Server();
 
@@ -39,6 +40,8 @@ class Server {
   network::SrvSession* current_session;
 
   Controller* controller;
+
+  const ServerOptions& options_;
 
   std::atomic_bool alive;
 };

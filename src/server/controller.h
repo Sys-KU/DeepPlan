@@ -4,13 +4,14 @@
 #include <network/session.h>
 #include <server/worker.h>
 #include <util.h>
+#include <options.h>
 
 #include <thread>
 #include <atomic>
 
 class Controller {
  public:
-  Controller(network::MessageQueue& messages);
+  Controller(network::MessageQueue& messages, const ServerOptions& options);
 
   void init();
 
@@ -35,4 +36,6 @@ class Controller {
   int mp_size_ = 0;
   EngineType engine_type_ = EngineType::NONE;
   ReclaimPolicy r_policy_ = ReclaimPolicy::RR;
+
+  const ServerOptions& options_;
 };

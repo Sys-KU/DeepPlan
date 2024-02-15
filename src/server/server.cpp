@@ -3,9 +3,10 @@
 
 #include <boost/asio.hpp>
 
-Server::Server(int port)
+Server::Server(int port, const ServerOptions& options)
   : io_service_(),
     acceptor_(io_service_, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), port)),
+    options_(options),
     alive(false) {};
 
 Server::~Server() {
@@ -13,7 +14,7 @@ Server::~Server() {
 }
 
 void Server::run() {
-  controller = new Controller(messages);
+  controller = new Controller(messages, options_);
 
   start_accept();
 
