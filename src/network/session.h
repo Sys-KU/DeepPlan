@@ -18,11 +18,11 @@ class Session : public message_connection, message_handler {
       msg_tx_(this, *this) {};
 
   virtual message_rx* new_rx_message(uint64_t hdr_len, uint64_t body_len,
-                                     uint64_t req_id, uint64_t msg_type) {};
+                                     uint64_t req_id, uint64_t msg_type) = 0;
 
-  virtual bool completed_receive(message_connection* conn, message_rx* req) {};
+  virtual bool completed_receive(message_connection* conn, message_rx* req) = 0;
 
-  virtual void completed_transmit(message_connection* conn, message_tx* req) {};
+  virtual void completed_transmit(message_connection* conn, message_tx* req) = 0;
 
  protected:
   message_sender msg_tx_;

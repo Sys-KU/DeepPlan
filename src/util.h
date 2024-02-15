@@ -122,6 +122,7 @@ class LRUCache {
     items.emplace_front(k, v);
 
     index.emplace(k, items.begin());
+    return true;
   }
 
   bool exist(const K& k) {
