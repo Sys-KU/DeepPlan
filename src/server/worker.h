@@ -10,7 +10,7 @@
 
 #define RECLAIM_LAYER_STEP 1
 #define RECLAIM_MEMORY_STEP 30 * (1 << 20) // 30 MB
-#define MINIMUM_CACHE_MEMORY_RATE 0.3 // 20%
+#define MINIMUM_CACHE_MEMORY_RATE 0.3 // 30%
 
 struct InferTask {
   InferTask() {};

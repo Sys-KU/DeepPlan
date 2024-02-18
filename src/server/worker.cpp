@@ -164,8 +164,11 @@ void Worker::secure_memory_to_load_model(libtorch::Model* model) {
               evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
 
               if (evict_model->remained_size
-                  < evict_model->model_size * (1 - MINIMUM_CACHE_MEMORY_RATE)) {
+                  > evict_model->model_size * MINIMUM_CACHE_MEMORY_RATE) {
                 running_models->put(evict_id, evict_model);
+              }
+              else {
+                evict_model->clear();
               }
             }
             else {
