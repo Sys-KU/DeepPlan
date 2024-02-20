@@ -93,12 +93,14 @@ WorkloadResult Workload::result(int slo) {
 
   std::sort(latencies.begin(), latencies.end());
 
+  int index_50 = latencies.size() * 0.5 - 1;
   int index_99 = latencies.size() * 0.99 - 1;
   int goodput_cnt = 0;
 
   for (auto& latency : latencies)
     if (latency <= slo) goodput_cnt++;
 
+  result.latency_50 = latencies[index_50];
   result.latency_99 = latencies[index_99];
   result.cold_rate = (double)cold_start_cnt / n_requests * 100;
   result.goodput_rate = (double)goodput_cnt / n_requests * 100;

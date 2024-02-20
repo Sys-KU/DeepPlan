@@ -5,6 +5,7 @@
 #include <random>
 
 struct WorkloadResult {
+  double latency_50;
   double latency_99;
   double cold_rate;
   double goodput_rate;
