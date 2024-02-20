@@ -31,7 +31,8 @@ typedef enum
 
 typedef enum
 {
-  RR = 0,
+  LRU = 0,
+  RR,
   BALANCE,
 } ReclaimPolicy;
 

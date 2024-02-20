@@ -4,7 +4,6 @@
 #include <server/worker.h>
 #include <server/model_manager.h>
 #include <deepplan/model.h>
-#include <deepcache/model.h>
 #include <cuda_runtime_api.h>
 #include <c10/cuda/CUDACachingAllocator.h>
 
@@ -53,7 +52,11 @@ void Worker::run() {
         throw std::runtime_error(ss.str());
       }
 
-      secure_memory_to_load_model(model);
+      size_t uncached_size = util::getModuleSize(model->model, true);
+      while ((getDeviceActiveMemorySize(device.index()) + uncached_size)
+             >= capacity_) {
+        preempt_models();
+      }
 
       ScriptModuleInput inputs;
 
@@ -105,6 +108,9 @@ void Worker::add_models(std::vector<std::string> model_names, int n_models,
   }
   size_t free;
   size_t total;
+  cudaSetDevice(device.index());
+
+  c10::cuda::CUDACachingAllocator::emptyCache();
   cudaError_t err = cudaMemGetInfo(&free, &total);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaMemGetInfo Error\n");
@@ -121,15 +127,15 @@ libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
 
     // If this model is DeepCache and partial,
     // it should secure memory to load the model
-    if (auto dc_model = dynamic_cast<deepcache::Model*>(model)) {
-      if (dc_model->remained_size > 0) {
+    if (auto dc_model = dynamic_cast<deepplan::Model*>(model)) {
+      if (dc_model->uncached_size > 0) {
         *is_cold = true;
       }
     }
   }
   else {
     model = model_manager->get_model(model_id);
-    if (auto dc_model = dynamic_cast<deepcache::Model*>(model) &&
+    if (auto dc_model = dynamic_cast<deepplan::Model*>(model) &&
         r_policy_ == ReclaimPolicy::BALANCE) {
       // Balance reclaim policy should check if this model is in partial models list
       // If the model is found, it should be cleared from that list
@@ -147,92 +153,79 @@ libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
   return model;
 }
 
-void Worker::secure_memory_to_load_model(libtorch::Model* model) {
-  // DeepCache Eviction Policy
-  if (auto dc_model = dynamic_cast<deepcache::Model*>(model)) {
-    if (dc_model->remained_size > 0) {
-      switch (r_policy_) {
-        case ReclaimPolicy::RR:
-          while ((getDeviceActiveMemorySize(device.index())+dc_model->remained_size)
-              >= capacity_) {
+void Worker::preempt_models() {
+  switch (r_policy_) {
+    case ReclaimPolicy::RR:
+      {
+        if (running_models->size() > 0) {
+          int evict_id;
+          auto evict_model = dynamic_cast<deepplan::Model*>(running_models->pop(&evict_id));
 
-            if (running_models->size() > 0) {
-              // We control the number of full-cached models that we can keep in Device.
-              int evict_id;
-              auto evict_model = dynamic_cast<deepcache::Model*>(running_models->pop(&evict_id));
+          evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
 
-              evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
+          if ((evict_model->model_size - evict_model->uncached_size)
+              > evict_model->model_size * MINIMUM_CACHE_MEMORY_RATE) {
+            running_models->put(evict_id, evict_model);
+          }
+          else {
+            evict_model->clear();
+          }
+        }
+        else {
+          throw std::runtime_error("There is no model to evict");
+        }
+      }
 
-              if (evict_model->remained_size
-                  > evict_model->model_size * MINIMUM_CACHE_MEMORY_RATE) {
-                running_models->put(evict_id, evict_model);
-              }
-              else {
-                evict_model->clear();
-              }
+      break;
+    case ReclaimPolicy::BALANCE:
+      {
+        auto models_list = partial_models_list;
+        models_list.push_front(running_models);
+
+        bool found = false;
+
+        for (auto iter = models_list.begin(); iter != models_list.end(); iter++) {
+          if ((*iter)->size() > 0) {
+            int evict_id;
+            auto evict_model = dynamic_cast<deepplan::Model*>((*iter)->pop(&evict_id));
+            evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
+            found = true;
+
+            iter++;
+            if (iter != models_list.end()) {
+              (*iter)->put(evict_id, evict_model);
             }
             else {
-              throw std::runtime_error("There is no model to evict");
-            }
-          }
-
-          break;
-        case ReclaimPolicy::BALANCE:
-          {
-            auto models_list = partial_models_list;
-            models_list.push_front(running_models);
-
-            while ((getDeviceActiveMemorySize(device.index())+dc_model->remained_size)
-                >= capacity_) {
-              bool found = false;
-
-              for (auto iter = models_list.begin(); iter != models_list.end(); iter++) {
-                if ((*iter)->size() > 0) {
-                  int evict_id;
-                  auto evict_model = dynamic_cast<deepcache::Model*>((*iter)->pop(&evict_id));
-                  evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
-                  found = true;
-
-                  iter++;
-                  if (iter != models_list.end()) {
-                    (*iter)->put(evict_id, evict_model);
-                  }
-                  else {
-                    // If the caching memory of the evict_model leaves on GPU,
-                    // we expand partial_models_list
-                    if (evict_model->remained_size < evict_model->model_size) {
-                      auto partial_models = new util::LRUCache<int, libtorch::Model*>();
-                      partial_models->put(evict_id, evict_model);
-                      partial_models_list.push_back(std::move(partial_models));
-                    }
-                  }
-
-                  break;
-                }
-              }
-
-              if (!found) {
-                throw std::runtime_error("There is no model to evict");
+              // If the caching memory of the evict_model leaves on GPU,
+              // we expand partial_models_list
+              if (evict_model->uncached_size < evict_model->model_size) {
+                auto partial_models = new util::LRUCache<int, libtorch::Model*>();
+                partial_models->put(evict_id, evict_model);
+                partial_models_list.push_back(std::move(partial_models));
               }
             }
+
+            break;
           }
+        }
 
-          break;
-
-        default:
-          break;
+        if (!found) {
+          throw std::runtime_error("There is no model to evict");
+        }
       }
-    }
-  }
-  // Otherwise, LRU Eviction Policy
-  else {
-    if (!model->is_cuda) {
-      while ((getDeviceActiveMemorySize(device.index())+model->model_size)
-          >= capacity_) {
+
+      break;
+
+    case ReclaimPolicy::LRU:
+      {
+        // Otherwise, LRU Eviction Policy
         auto evict_model = running_models->pop();
         evict_model->clear();
       }
-    }
+      break;
+
+    default:
+      break;
   }
 }
 

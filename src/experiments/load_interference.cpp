@@ -9,8 +9,8 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
 
-#include <deepcache/model.h>
-#include <deepcache/engine.h>
+#include <deepplan/model.h>
+#include <deepplan/engine.h>
 #include <util.h>
 
 struct BenchmarkOptions {
@@ -97,16 +97,18 @@ void benchmark(BenchmarkOptions* options) {
 
   torch::NoGradGuard no_grad;
 
-  deepcache::Model* model = new deepcache::Model(
+  deepplan::Model* model = new deepplan::Model(
                                             options->model_name,
                                             model_path,
-                                            target_device.index()
+                                            EngineType::PIPESWITCH,
+                                            {target_device.index()}
                                           );
 
-  deepcache::Model* load_model = new deepcache::Model(
+  deepplan::Model* load_model = new deepplan::Model(
                                               options->model_name,
                                               model_path,
-                                              target_device.index()
+                                              EngineType::PIPESWITCH,
+                                              {target_device.index()}
                                             );
 
   util::InputGenerator input_generator;
@@ -158,11 +160,11 @@ int main(int argc, char** argv) {
   std::cout << "Caching Study " << benchmark_options->model_name << " "
             << benchmark_options->batch_size << "-Batch\n";
 
-  deepcache::Init();
+  deepplan::Init();
 
   benchmark(benchmark_options);
 
-  deepcache::Deinit();
+  deepplan::Deinit();
 
   return 0;
 }

@@ -175,22 +175,12 @@ class PipelineEngine : public Engine {
 
     assert(n_device > target_device);
 
-    if (!model->is_cuda) {
-
-      for (int device : model->devices) {
-        std::vector<ScriptModule> modules;
-        for (auto idx : model->device_map[device]) {
-          modules.push_back(model->layers[idx]);
-        }
-        g_pcie_thrs[device]->transfer_modules(modules, target_device);
-      }
-    }
+    LoadLayers(model);
 
     {
       at::cuda::CUDAStreamGuard stream_guard(g_exec_streams[target_device]);
       outputs = model->model.forward(x);
     }
-    model->is_cuda = true;
 
     return outputs;
   }
@@ -203,6 +193,23 @@ torch::jit::IValue RunEngine(Model* model, ScriptModuleInput& x) {
   auto outputs = engine.run(model, x);
 
   return outputs;
+}
+
+void LoadLayers(Model* model) {
+  int target_device = model->target_device.index();
+
+  std::vector<ScriptModule> modules;
+  for (auto& [idx, device] : model->load_state_maps) {
+    if (device == Device::CPU) {
+      modules.push_back(model->layers[idx]);
+      device = Device::CUDA;
+    }
+  }
+  if (!modules.empty()) {
+    model->uncached_size = 0;
+    model->is_cuda = true;
+    g_pcie_thrs[target_device]->transfer_modules(modules, target_device);
+  }
 }
 
 }

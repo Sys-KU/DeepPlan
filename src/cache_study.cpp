@@ -7,8 +7,8 @@
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime_api.h>
 
-#include <deepcache/model.h>
-#include <deepcache/engine.h>
+#include <deepplan/model.h>
+#include <deepplan/engine.h>
 #include <util.h>
 #include <options.h>
 
@@ -41,11 +41,10 @@ void benchmark(CacheStudyOptions options) {
 
   torch::NoGradGuard no_grad;
 
-  deepcache::Model* model = new deepcache::Model(
-                                            options.model_name,
-                                            model_path,
-                                            target_device.index()
-                                          );
+  deepplan::Model* model = new deepplan::Model(options.model_name,
+                                               model_path,
+                                               EngineType::DEEPPLAN,
+                                               {target_device.index()});
 
   util::InputGenerator input_generator;
 
@@ -151,11 +150,11 @@ int main(int argc, char** argv) {
   std::cout << "Caching Study " << options.model_name << " "
             << options.batch_size << "-Batch\n";
 
-  deepcache::Init();
+  deepplan::Init();
 
   benchmark(options);
 
-  deepcache::Deinit();
+  deepplan::Deinit();
 
   return 0;
 }

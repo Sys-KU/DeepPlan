@@ -4,7 +4,6 @@
 #include <util.h>
 #include <options.h>
 #include <deepplan/engine.h>
-#include <deepcache/engine.h>
 
 #include <thread>
 
@@ -14,7 +13,6 @@ Controller::Controller(network::MessageQueue& messages, const ServerOptions& opt
     alive(false) {init();};
 
 void Controller::init() {
-  deepcache::Init();
   deepplan::Init();
 
   alive = true;

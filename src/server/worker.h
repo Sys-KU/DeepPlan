@@ -4,7 +4,6 @@
 #include <network/session.h>
 #include <server/model_manager.h>
 #include <deepplan/model.h>
-#include <deepcache/model.h>
 #include <optional>
 #include "tbb/concurrent_queue.h"
 
@@ -45,7 +44,7 @@ class Worker {
 
   libtorch::Model* find_model(int model_id, bool* is_cold);
 
-  void secure_memory_to_load_model(libtorch::Model* model);
+  void preempt_models();
 
   void clear_models();
 
