@@ -5,6 +5,7 @@
 #include <random>
 
 struct WorkloadResult {
+  double throughput;
   double latency_50;
   double latency_99;
   double cold_rate;
@@ -36,6 +37,7 @@ class Workload {
 
  private:
   std::vector<std::pair<double, int>> _traces;
+  double elapsed_time;
   std::vector<double> latencies;
   std::vector<double> infer_times;
   int cold_start_cnt = 0;

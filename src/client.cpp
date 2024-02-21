@@ -36,6 +36,7 @@ void simple_experiment(ClientOptions options) {
   auto result = workload->result(slo);
 
   std::cout << "=======================================\n";
+  std::cout << "Throughput: " << result.throughput << " r/s\n";
   std::cout << "50% Latency: " << result.latency_50 << " ms\n";
   std::cout << "99% Latency: " << result.latency_99 << " ms\n";
   std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";

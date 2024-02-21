@@ -65,6 +65,9 @@ Workload::Workload(std::vector<unsigned>& rates,
 void Workload::run(std::vector<std::vector<char>>& inputs) {
   client.connect(addr, port);
 
+  double t1, t2;
+  t1 = util::now();
+
   for (auto& trace : _traces) {
     double interval = trace.first;
     int model_id = trace.second;
@@ -86,6 +89,9 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
   }
 
   client.shutdown();
+
+  t2 = util::now();
+  this->elapsed_time = (t2-t1) / 1e6;  // ms
 }
 
 WorkloadResult Workload::result(int slo) {
@@ -100,6 +106,7 @@ WorkloadResult Workload::result(int slo) {
   for (auto& latency : latencies)
     if (latency <= slo) goodput_cnt++;
 
+  result.throughput = n_requests / (elapsed_time / 1e3);  // requests per sec
   result.latency_50 = latencies[index_50];
   result.latency_99 = latencies[index_99];
   result.cold_rate = (double)cold_start_cnt / n_requests * 100;
