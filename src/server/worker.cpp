@@ -52,7 +52,7 @@ void Worker::run() {
         throw std::runtime_error(ss.str());
       }
 
-      size_t uncached_size = util::getModuleSize(model->model, true);
+      size_t uncached_size = dynamic_cast<deepplan::Model*>(model)->uncached_size;
       while ((getDeviceActiveMemorySize(device.index()) + uncached_size)
              >= capacity_) {
         preempt_models();
@@ -163,7 +163,8 @@ void Worker::preempt_models() {
 
           evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
 
-          if ((evict_model->model_size - evict_model->uncached_size)
+          auto uncached_size = evict_model->uncached_size;
+          if ((evict_model->model_size - uncached_size)
               > evict_model->model_size * MINIMUM_CACHE_MEMORY_RATE) {
             running_models->put(evict_id, evict_model);
           }
