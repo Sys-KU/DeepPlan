@@ -20,7 +20,8 @@ struct ServerOptions : public Options{
 struct ClientOptions : public Options{
  public:
   enum class WorkloadType {
-    SIMPLE = 0,
+    SIMPLE_UNIFORM = 0,
+    SIMPLE_ZIPF,
     BURSTY,
     AZURE,
     SKEW,

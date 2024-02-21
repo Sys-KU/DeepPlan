@@ -6,7 +6,7 @@
 #include <options.h>
 
 
-void simple_experiment(ClientOptions options) {
+void simple_experiment(ClientOptions options, std::string dist_type) {
   std::vector<std::string> model_names = options.model_names;
   int concurrency = options.concurrency;
   int rate = options.rate;
@@ -24,8 +24,8 @@ void simple_experiment(ClientOptions options) {
   std::cout << "Upload Model...\n";
   model_loader->run();
 
-  auto warmup = new Workload(concurrency, rate, n_warmup, "zipfian", "127.0.0.1", "4321");
-  auto workload = new Workload(concurrency, rate, n_test, "zipfian", "127.0.0.1", "4321");
+  auto warmup = new Workload(concurrency, rate, n_warmup, dist_type, "127.0.0.1", "4321");
+  auto workload = new Workload(concurrency, rate, n_test, dist_type, "127.0.0.1", "4321");
 
   std::cout << "Warmup...\n";
   warmup->run(model_loader->inputs);
@@ -171,8 +171,11 @@ int main(int argc, char** argv) {
 
   try {
     switch (client_options.workload_type) {
-      case ClientOptions::WorkloadType::SIMPLE:
-        simple_experiment(client_options);
+      case ClientOptions::WorkloadType::SIMPLE_UNIFORM:
+        simple_experiment(client_options, "uniform");
+        break;
+      case ClientOptions::WorkloadType::SIMPLE_ZIPF:
+        simple_experiment(client_options, "zipfian");
         break;
       case ClientOptions::WorkloadType::BURSTY:
         bursty_experiment(client_options);
