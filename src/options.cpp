@@ -309,7 +309,7 @@ void BenchmarkOptions::parseOptions(int argc, char** argv) {
 void CacheStudyOptions::print_usage(char* program_name) {
   fprintf(stderr,
       "Usage : %s [-h] --model/-m MODEL_NAME\n"
-      "\t\t[--batch/-b BATCH_SIZE] [--verbose/-v]\n",
+      "\t\t[--batch/-b BATCH_SIZE] [--engine/-e {pipeline,deepplan}] [--verbose/-v]\n",
       program_name);
 }
 
@@ -321,6 +321,7 @@ void CacheStudyOptions::parseOptions(int argc, char** argv) {
     {"help",    no_argument,       0, 'h' },
     {"model",   required_argument, 0, 'm' },
     {"batch",   required_argument, 0, 'b' },
+    {"engine",  required_argument, 0, 'e' },
     {0,         0,                 0,  0  }
   };
 
@@ -329,12 +330,16 @@ void CacheStudyOptions::parseOptions(int argc, char** argv) {
   bool found = false;
   bool pass_model = false;
 
+  char engine_types[][20] = {"pipeline", "deepplan"};
+  int n_types = sizeof(engine_types) / 20;
+
   this->num_warmup  = 10;
   this->num_test    = 10;
   this->batch_size  = 1;
+  this->engine_type = EngineType::PIPESWITCH;
   this->verbose     = false;
 
-  while ((flag = getopt_long(argc, argv, "b:hm:v:", long_options, NULL)) != -1) { 
+  while ((flag = getopt_long(argc, argv, "b:hm:v:e:", long_options, NULL)) != -1) { 
     switch (flag) {
       case 'h':
         print_usage(argv[0]);
@@ -348,6 +353,27 @@ void CacheStudyOptions::parseOptions(int argc, char** argv) {
         break;
       case 'v':
         this->verbose = true;
+        break;
+      case 'e':
+        found = false;
+        for (int i = 0; i < n_types; i++) {
+          if (!strcmp(engine_types[i], optarg)) {
+            this->engine_type = EngineType(i+2);
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          print_usage(argv[0]);
+          fprintf(stderr, "[Error] argument --engine/-e: invalid choice: %s (choose from",
+              optarg);
+          for (int i = 0; i < n_types; i++) {
+            fprintf(stderr, " \'%s\'", engine_types[i]);
+          }
+          fprintf(stderr, ")\n");
+          exit(EXIT_FAILURE);
+        }
         break;
       default:
         print_usage(argv[0]);

@@ -58,6 +58,7 @@ struct BenchmarkOptions {
 struct CacheStudyOptions {
  public:
   std::string model_name;
+  EngineType engine_type;
   bool verbose;
   int batch_size;
   int num_warmup;

@@ -43,7 +43,7 @@ void benchmark(CacheStudyOptions options) {
 
   deepplan::Model* model = new deepplan::Model(options.model_name,
                                                model_path,
-                                               EngineType::DEEPPLAN,
+                                               options.engine_type,
                                                {target_device.index()});
 
   util::InputGenerator input_generator;
