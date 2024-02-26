@@ -75,7 +75,7 @@ void ClientOptions::parseOptions(int argc, char** argv) {
 
   char engine_types[][20] = { "in_memory", "demand", "pipeline", "deepplan", "deepcache" };
   char workload_types[][20] = { "simple_uniform", "simple_zipf", "bursty", "azure", "skew" };
-  char r_policies[][20] = { "lru", "rr", "balance" };
+  char r_policies[][20] = { "lru", "rr", "balance", "hybrid"};
   int n_engine_types = sizeof(engine_types) / 20;
   int n_r_polices = sizeof(r_policies) / 20;
   int n_workload_types = sizeof(workload_types) / 20;

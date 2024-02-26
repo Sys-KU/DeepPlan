@@ -216,7 +216,52 @@ void Worker::preempt_models() {
       }
 
       break;
+    case ReclaimPolicy::HYBRID:
+      {
+        auto models_list = partial_models_list;
+        models_list.push_front(running_models);
 
+        bool found = false;
+
+        for (auto iter = models_list.begin(); iter != models_list.end(); iter++) {
+          if ((*iter)->size() > 0) {
+            int evict_id;
+            auto evict_model = dynamic_cast<deepplan::Model*>((*iter)->pop(&evict_id));
+            evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
+            found = true;
+
+            // NOTE(jinu): If uncached memory doesn't exceed the optimal point,
+            // We pass the evict model to the following list. The evict priority
+            // of that model is lowered. The method of passing to the following
+            // list means managing things in a balanced manner. Otherwise, We
+            // put the current list instead of passing. The models on the list
+            // are managed as round-robin.
+            if (evict_model->uncached_size < 180 * MB) {
+              iter++;
+            }
+
+            if (iter != models_list.end()) {
+              (*iter)->put(evict_id, evict_model);
+            }
+            else {
+              // If the caching memory of the evict_model leaves on GPU,
+              // we expand partial_models_list
+              if (evict_model->uncached_size < evict_model->model_size) {
+                auto partial_models = new util::LRUCache<int, libtorch::Model*>();
+                partial_models->put(evict_id, evict_model);
+                partial_models_list.push_back(std::move(partial_models));
+              }
+            }
+
+            break;
+          }
+        }
+
+        if (!found) {
+          throw std::runtime_error("There is no model to evict");
+        }
+      }
+      break;
     case ReclaimPolicy::LRU:
       {
         // Otherwise, LRU Eviction Policy

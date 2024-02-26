@@ -18,6 +18,8 @@ typedef torch::jit::script::Module ScriptModule;
 #define STEP_SIZE (1024*1024)
 #define ALIGNMENT 8
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
+#define MB (1<<20)
+#define GB (1<<30)
 
 typedef enum
 {
@@ -34,6 +36,7 @@ typedef enum
   LRU = 0,
   RR,
   BALANCE,
+  HYBRID,
 } ReclaimPolicy;
 
 struct InputConfig {
