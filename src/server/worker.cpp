@@ -161,7 +161,7 @@ void Worker::preempt_models() {
           int evict_id;
           auto evict_model = dynamic_cast<deepplan::Model*>(running_models->pop(&evict_id));
 
-          evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
+          evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
 
           auto uncached_size = evict_model->uncached_size;
           if ((evict_model->model_size - uncached_size)
@@ -189,7 +189,7 @@ void Worker::preempt_models() {
           if ((*iter)->size() > 0) {
             int evict_id;
             auto evict_model = dynamic_cast<deepplan::Model*>((*iter)->pop(&evict_id));
-            evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
+            evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
             found = true;
 
             iter++;
@@ -227,7 +227,7 @@ void Worker::preempt_models() {
           if ((*iter)->size() > 0) {
             int evict_id;
             auto evict_model = dynamic_cast<deepplan::Model*>((*iter)->pop(&evict_id));
-            evict_model->reclaim_memory(RECLAIM_MEMORY_STEP);
+            evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
             found = true;
 
             // NOTE(jinu): If uncached memory doesn't exceed the optimal point,

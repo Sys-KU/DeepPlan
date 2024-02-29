@@ -162,6 +162,10 @@ void Model::reclaim_memory(size_t size) {
   uncached_size += current_size;
 }
 
+void Model::reclaim_memory(double rate) {
+  reclaim_memory((size_t)(model_size * rate));
+}
+
 void Model::load_layers(bool non_blocking) {
   load_layers(load_state_maps.size(), non_blocking);
 }

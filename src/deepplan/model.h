@@ -30,6 +30,8 @@ class Model : public libtorch::Model {
 
   void reclaim_memory(size_t size);
 
+  void reclaim_memory(double rate);
+
   void load_layers(bool non_blocking = false);
 
   void load_layers(int n_layers, bool non_blocking = false);
