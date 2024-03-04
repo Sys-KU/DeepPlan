@@ -21,6 +21,8 @@ Worker::Worker(int device, const ServerOptions& options, std::string worker_name
       for (auto& models_list : partial_models_list) {
         models_list = new util::LRUCache<int, libtorch::Model*>();
       }
+      req_scoreboard = new RequestScoreboard(MAX_WINDOW_SIZE);
+      cfr = new CFR();
     }
 
 Worker::~Worker() {
@@ -51,6 +53,8 @@ void Worker::run() {
 
         throw std::runtime_error(ss.str());
       }
+
+      req_scoreboard->update_window(model_id);
 
       size_t uncached_size = dynamic_cast<deepplan::Model*>(model)->uncached_size;
       while ((getDeviceActiveMemorySize(device.index()) + uncached_size)
@@ -97,6 +101,7 @@ void Worker::add_models(std::vector<std::string> model_names, int n_models,
                         EngineType engine_type, std::vector<int> devices) {
   auto progressbar = util::progressbar(n_models, name);
   if (model_manager) {
+    req_scoreboard->expand(n_models);
     for (int i = 0; i < n_models; i++) {
       auto model_name = model_names[i % model_names.size()];
       model_manager->add_model(model_name, devices);
@@ -134,6 +139,7 @@ libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
     }
   }
   else {
+    bool found = false;
     model = model_manager->get_model(model_id);
     if (auto dc_model = dynamic_cast<deepplan::Model*>(model) &&
         r_policy_ == ReclaimPolicy::BALANCE) {
@@ -143,8 +149,14 @@ libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
       for (iter; iter != partial_models_list.end(); iter++) {
         if ((*iter)->exist(model_id)) {
           (*iter)->erase(model_id);
+          found = true;
+          break;
         }
       }
+    }
+
+    if (!found && cfr->exist(model_id)) {
+      cfr->erase(model_id);
     }
 
     *is_cold = true;
@@ -262,6 +274,74 @@ void Worker::preempt_models() {
         }
       }
       break;
+
+    case ReclaimPolicy::DYNAMIC:
+      {
+        auto models_list = partial_models_list;
+        models_list.push_front(running_models);
+
+        bool found = false;
+
+        for (auto iter = models_list.begin(); iter != models_list.end(); iter++) {
+          if ((*iter)->size() > 0) {
+            int evict_id;
+            auto evict_model = dynamic_cast<deepplan::Model*>((*iter)->pop(&evict_id));
+            evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
+            found = true;
+
+            // NOTE(jinu): If uncached memory doesn't exceed the optimal point,
+            // We pass the evict model to the following list. The evict priority
+            // of that model is lowered. The method of passing to the following
+            // list means managing things in a balanced manner. Otherwise, We
+            // put the current list instead of passing. The models on the list
+            // are managed as round-robin.
+            if (evict_model->uncached_size < 180 * MB) {
+              iter++;
+            }
+            else {
+              cfr->put(evict_id, req_scoreboard->get(evict_id));
+              break;
+            }
+
+            if (iter != models_list.end()) {
+              (*iter)->put(evict_id, evict_model);
+            }
+            else {
+              // If the caching memory of the evict_model leaves on GPU,
+              // we expand partial_models_list
+              if (evict_model->uncached_size < evict_model->model_size) {
+                auto partial_models = new util::LRUCache<int, libtorch::Model*>();
+                partial_models->put(evict_id, evict_model);
+                partial_models_list.push_back(std::move(partial_models));
+              }
+            }
+
+            break;
+          }
+        }
+
+        if (!found && cfr->size() > 0)  {
+          auto [vruntime, evict_model_id] = cfr->pop();
+
+          auto evict_model = dynamic_cast<deepplan::Model*>(
+              model_manager->get_model(evict_model_id));
+          evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
+
+          assert(evict_model->uncached_size <= evict_model->model_size);
+          if (evict_model->uncached_size < evict_model->model_size) {
+            cfr->put(evict_model_id, vruntime + req_scoreboard->get(evict_model_id));
+          }
+
+          found = true;
+        }
+
+
+        if (!found) {
+          throw std::runtime_error("There is no model to evict");
+        }
+      }
+      break;
+
     case ReclaimPolicy::LRU:
       {
         // Otherwise, LRU Eviction Policy
@@ -296,6 +376,10 @@ void Worker::clear_models() {
         p_models->pop();
       }
     }
+    while (cfr->size() > 0) {
+      cfr->pop();
+    }
+    req_scoreboard->clear();
   }
   c10::cuda::CUDACachingAllocator::emptyCache();
 }

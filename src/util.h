@@ -37,6 +37,7 @@ typedef enum
   RR,
   BALANCE,
   HYBRID,
+  DYNAMIC,
 } ReclaimPolicy;
 
 struct InputConfig {
