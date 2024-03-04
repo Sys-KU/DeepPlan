@@ -14,6 +14,14 @@ typedef enum {
   CUDA,
 } Device;
 
+struct LoadState {
+  LoadState(int idx, Device device, size_t size)
+    : idx(idx), device(device), size(size) {}
+  int idx;
+  Device device;
+  size_t size;
+};
+
 class Model : public libtorch::Model {
  public:
   Model(const std::string name, const std::string model_path, const EngineType type, const std::vector<int> devices);
@@ -37,7 +45,7 @@ class Model : public libtorch::Model {
   void load_layers(int n_layers, bool non_blocking = false);
 
   // load_state_maps represent the load state whether layer is loaded or not.
-  std::vector<std::pair<int, Device>> load_state_maps;
+  std::vector<LoadState> load_state_maps;
 
   // uncached_size represent the unloaded size of layers
   // that are required to execute this model

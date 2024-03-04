@@ -29,7 +29,8 @@ void Model::init() {
         this->layers[i].to(at::kCPU);
         this->layers[i].pin_memory();
         this->layers[i].cuda_backup();
-        this->load_state_maps.push_back(std::make_pair(i, Device::CPU));
+        this->load_state_maps.emplace_back(
+            i, Device::CPU, util::getModuleSize(this->layers[i]));
       }
       break;
 
@@ -42,7 +43,8 @@ void Model::init() {
             this->layers[i].to(at::kCPU);
             this->layers[i].pin_memory();
             this->layers[i].cuda_backup();
-            this->load_state_maps.push_back(std::make_pair(i, Device::CPU));
+            this->load_state_maps.emplace_back(
+                i, Device::CPU, util::getModuleSize(this->layers[i]));
           }
           break;
         }
@@ -67,19 +69,19 @@ void Model::init() {
       std::vector<int> layer_list;
 
       for (iter; iter != load_state_maps.end(); iter++) {
-        layer_size = util::getModuleSize(layers[iter->first]);
+        layer_size = iter->size;
         cumm_size += layer_size;
         if (cumm_size > block_size) {
           break;
         }
 
-        layer_list.push_back(iter->first);
+        layer_list.push_back(iter->idx);
       }
 
       // Insert remain layers to last device
       if (i == n_device-1) {
         for (iter; iter != load_state_maps.end(); iter++) {
-          layer_list.push_back(iter->first);
+          layer_list.push_back(iter->idx);
         }
       }
 
@@ -106,7 +108,7 @@ void Model::to(at::Device device, bool non_blocking) {
   Device dest_device = device.is_cuda() ? Device::CUDA : Device::CPU;
 
   for (auto& iter : load_state_maps) {
-    iter.second = dest_device;
+    iter.device = dest_device;
   }
 
   if (device.is_cuda())
@@ -119,9 +121,9 @@ void Model::clear()
 {
   if (this->is_cuda) {
     model.clear();
-    for (auto& [idx, device] : load_state_maps) {
-      if (device == Device::CUDA) {
-        device = Device::CPU;
+    for (auto& load_state : load_state_maps) {
+      if (load_state.device == Device::CUDA) {
+        load_state.device = Device::CPU;
       }
     }
     is_cuda = false;
@@ -130,36 +132,39 @@ void Model::clear()
 }
 
 void Model::reclaim_layers(int n_layers) {
+  size_t reclaimed_size = 0;
   int cnt = 0;
 
-  for (auto& [idx, device] : load_state_maps) {
-    if (device == Device::CUDA) {
-      layers[idx].clear();
-      device = Device::CPU;
-      uncached_size += util::getModuleSize(layers[idx]);
+  for (auto& load_state : load_state_maps) {
+    if (load_state.device == Device::CUDA) {
+      layers[load_state.idx].clear();
+      load_state.device = Device::CPU;
+      reclaimed_size += load_state.size;
       cnt++;
     }
     if (n_layers <= cnt) break;
   }
+
+  uncached_size += reclaimed_size;
 }
 
 void Model::reclaim_memory(size_t size) {
-  size_t current_size = 0;
+  size_t reclaimed_size = 0;
 
   // Reclaim memory in the reverse order of layerslayers backward.
   for (auto iter = load_state_maps.rbegin(); iter != load_state_maps.rend(); iter++) {
-    auto&& [idx, device] = (*iter);
-    if (device == Device::CUDA) {
-      layers[idx].clear();
-      device = Device::CPU;
-      current_size += util::getModuleSize(layers[idx]);
-      if (current_size > size) {
+    auto&& load_state = (*iter);
+    if (load_state.device == Device::CUDA) {
+      layers[load_state.idx].clear();
+      load_state.device = Device::CPU;
+      reclaimed_size += load_state.size;
+      if (reclaimed_size > size) {
         break;
       }
     }
   }
 
-  uncached_size += current_size;
+  uncached_size += reclaimed_size;
 }
 
 void Model::reclaim_memory(double rate) {
@@ -173,12 +178,12 @@ void Model::load_layers(bool non_blocking) {
 void Model::load_layers(int n_layers, bool non_blocking) {
   int cnt = 0;
 
-  for (auto& [idx, device] : load_state_maps) {
+  for (auto& load_state : load_state_maps) {
     if (n_layers <= cnt) break;
-    if (device == Device::CPU) {
-      layers[idx].to(target_device, non_blocking);
-      device = Device::CUDA;
-      uncached_size -= util::getModuleSize(layers[idx]);
+    if (load_state.device == Device::CPU) {
+      layers[load_state.idx].to(target_device, non_blocking);
+      load_state.device = Device::CUDA;
+      uncached_size -= load_state.size;
       cnt++;
     }
   }

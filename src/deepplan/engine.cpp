@@ -199,10 +199,10 @@ void LoadLayers(Model* model) {
   int target_device = model->target_device.index();
 
   std::vector<ScriptModule> modules;
-  for (auto& [idx, device] : model->load_state_maps) {
-    if (device == Device::CPU) {
-      modules.push_back(model->layers[idx]);
-      device = Device::CUDA;
+  for (auto& load_state : model->load_state_maps) {
+    if (load_state.device == Device::CPU) {
+      modules.push_back(model->layers[load_state.idx]);
+      load_state.device = Device::CUDA;
     }
   }
   if (!modules.empty()) {
