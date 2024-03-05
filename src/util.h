@@ -130,6 +130,16 @@ class LRUCache {
     return true;
   }
 
+  bool put_back(const K& k, const V& v) {
+    if(exist(k)) {
+      return false;
+    }
+
+    items.emplace_back(k, v);
+    index.emplace(k, --items.end());
+    return true;
+  }
+
   bool exist(const K& k) {
     return (index.count(k)>0);
   }

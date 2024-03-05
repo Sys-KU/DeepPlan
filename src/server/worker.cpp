@@ -129,22 +129,15 @@ libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
 
   if (running_models->exist(model_id)) {
     model = running_models->erase(model_id);
-
-    // If this model is DeepCache and partial,
-    // it should secure memory to load the model
-    if (auto dc_model = dynamic_cast<deepplan::Model*>(model)) {
-      if (dc_model->uncached_size > 0) {
-        *is_cold = true;
-      }
-    }
   }
   else {
     bool found = false;
     model = model_manager->get_model(model_id);
-    if (auto dc_model = dynamic_cast<deepplan::Model*>(model) &&
-        r_policy_ == ReclaimPolicy::BALANCE) {
-      // Balance reclaim policy should check if this model is in partial models list
-      // If the model is found, it should be cleared from that list
+
+    if (r_policy_ == ReclaimPolicy::BALANCE ||
+        r_policy_ == ReclaimPolicy::HYBRID) {
+      // Balance or Hybrid reclaim policy should check if this model is in
+      // partial models list. If the model is found, it should be cleared from that list
       auto iter = partial_models_list.begin();
       for (iter; iter != partial_models_list.end(); iter++) {
         if ((*iter)->exist(model_id)) {
@@ -154,12 +147,14 @@ libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
         }
       }
     }
-
-    if (!found && cfr->exist(model_id)) {
+    else if (r_policy_ == ReclaimPolicy::DYNAMIC && cfr->exist(model_id)) {
       cfr->erase(model_id);
+      found = true;
     }
 
-    *is_cold = true;
+    if (!found) {
+      *is_cold = true;
+    }
   }
 
   return model;
@@ -230,43 +225,41 @@ void Worker::preempt_models() {
       break;
     case ReclaimPolicy::HYBRID:
       {
-        auto models_list = partial_models_list;
-        models_list.push_front(running_models);
-
+        auto partial_models = partial_models_list.front();
         bool found = false;
 
-        for (auto iter = models_list.begin(); iter != models_list.end(); iter++) {
-          if ((*iter)->size() > 0) {
-            int evict_id;
-            auto evict_model = dynamic_cast<deepplan::Model*>((*iter)->pop(&evict_id));
-            evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
-            found = true;
+        // Apply LRU policy for models that don't reach the sweet spot.
+        if (running_models->size() > 0) {
+          int evict_id;
+          auto evict_model = dynamic_cast<deepplan::Model*>(
+              running_models->pop(&evict_id));
+          evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
 
-            // NOTE(jinu): If uncached memory doesn't exceed the optimal point,
-            // We pass the evict model to the following list. The evict priority
-            // of that model is lowered. The method of passing to the following
-            // list means managing things in a balanced manner. Otherwise, We
-            // put the current list instead of passing. The models on the list
-            // are managed as round-robin.
-            if (evict_model->uncached_size < 180 * MB) {
-              iter++;
-            }
-
-            if (iter != models_list.end()) {
-              (*iter)->put(evict_id, evict_model);
-            }
-            else {
-              // If the caching memory of the evict_model leaves on GPU,
-              // we expand partial_models_list
-              if (evict_model->uncached_size < evict_model->model_size) {
-                auto partial_models = new util::LRUCache<int, libtorch::Model*>();
-                partial_models->put(evict_id, evict_model);
-                partial_models_list.push_back(std::move(partial_models));
-              }
-            }
-
-            break;
+          if (evict_model->uncached_size >= 180 * MB) {
+            // Delegate the model to RR.
+            partial_models->put(evict_id, evict_model);
           }
+          else {
+            running_models->put_back(evict_id, evict_model);
+          }
+
+          found = true;
+        }
+
+        if (!found && partial_models->size() > 0) {
+          int evict_id;
+          auto evict_model = dynamic_cast<deepplan::Model*>(
+              partial_models->pop(&evict_id));
+
+          evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
+
+          if (evict_model->model_size > evict_model->uncached_size) {
+            partial_models->put(evict_id, evict_model);
+          }
+          else {
+            evict_model->clear();
+          }
+          found = true;
         }
 
         if (!found) {
@@ -277,47 +270,24 @@ void Worker::preempt_models() {
 
     case ReclaimPolicy::DYNAMIC:
       {
-        auto models_list = partial_models_list;
-        models_list.push_front(running_models);
-
         bool found = false;
 
-        for (auto iter = models_list.begin(); iter != models_list.end(); iter++) {
-          if ((*iter)->size() > 0) {
-            int evict_id;
-            auto evict_model = dynamic_cast<deepplan::Model*>((*iter)->pop(&evict_id));
-            evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
-            found = true;
+        // Apply LRU policy for models that don't reach the sweet spot.
+        if (running_models->size() > 0) {
+          int evict_id;
+          auto evict_model = dynamic_cast<deepplan::Model*>(
+              running_models->pop(&evict_id));
+          evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
 
-            // NOTE(jinu): If uncached memory doesn't exceed the optimal point,
-            // We pass the evict model to the following list. The evict priority
-            // of that model is lowered. The method of passing to the following
-            // list means managing things in a balanced manner. Otherwise, We
-            // put the current list instead of passing. The models on the list
-            // are managed as round-robin.
-            if (evict_model->uncached_size < 180 * MB) {
-              iter++;
-            }
-            else {
-              cfr->put(evict_id, req_scoreboard->get(evict_id));
-              break;
-            }
-
-            if (iter != models_list.end()) {
-              (*iter)->put(evict_id, evict_model);
-            }
-            else {
-              // If the caching memory of the evict_model leaves on GPU,
-              // we expand partial_models_list
-              if (evict_model->uncached_size < evict_model->model_size) {
-                auto partial_models = new util::LRUCache<int, libtorch::Model*>();
-                partial_models->put(evict_id, evict_model);
-                partial_models_list.push_back(std::move(partial_models));
-              }
-            }
-
-            break;
+          if (evict_model->uncached_size >= 180 * MB) {
+            // Delegate the model to CFR.
+            cfr->put(evict_id, req_scoreboard->get(evict_id));
           }
+          else {
+            running_models->put_back(evict_id, evict_model);
+          }
+
+          found = true;
         }
 
         if (!found && cfr->size() > 0)  {
