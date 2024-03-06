@@ -24,7 +24,6 @@ struct ClientOptions : public Options{
     SIMPLE_ZIPF,
     BURSTY,
     AZURE,
-    SKEW,
   } workload_type;
 
   std::vector<std::string> model_names;

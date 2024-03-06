@@ -48,44 +48,6 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   }
 }
 
-void skew_experiment(ClientOptions options) {
-  std::vector<std::string> model_names = options.model_names;
-  int concurrency = options.concurrency;
-  int rate = options.rate;
-  int mp_size = options.mp_size;
-  EngineType engine_type = options.engine_type;
-  ReclaimPolicy r_policy = options.r_policy;
-  int slo = options.slo;
-
-  int n_warmup = options.n_warmup;
-  int n_test = rate * 100;
-
-  auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, "127.0.0.1", "4321");
-
-  std::cout << "Upload Model...\n";
-  model_loader->run();
-
-  auto warmup = new Workload(concurrency, rate, n_warmup, "zipfian", "127.0.0.1", "4321");
-  auto workload = new Workload(concurrency, rate, n_test, "zipfian", "127.0.0.1", "4321");
-
-  std::cout << "Warmup...\n";
-  warmup->run(model_loader->inputs);
-
-  std::cout << "Test...\n";
-  workload->run(model_loader->inputs);
-
-  auto result = workload->result(slo);
-
-  std::cout << "99% Latency: " << result.latency_99 << " ms\n";
-  std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
-  std::cout << "Goodput Rate: " << result.goodput_rate << " %\n";
-
-  if (!options.dump.empty()) {
-    workload->dump(options.dump);
-  }
-}
-
 void bursty_experiment(ClientOptions options) {
   std::vector<std::string> model_names = options.model_names;
   int concurrency = options.concurrency;
@@ -183,8 +145,6 @@ int main(int argc, char** argv) {
       case ClientOptions::WorkloadType::AZURE:
         azure_experiment(client_options);
         break;
-      case ClientOptions::WorkloadType::SKEW:
-        skew_experiment(client_options);
     }
   }
   catch (std::exception& e) {
