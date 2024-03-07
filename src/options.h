@@ -33,6 +33,7 @@ struct ClientOptions : public Options{
   EngineType engine_type;
   ReclaimPolicy r_policy;
   int slo;
+  float alpha;
   std::string dump;
   int n_warmup;
   int n_test;

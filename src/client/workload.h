@@ -17,6 +17,9 @@ class Workload {
   Workload(int concurrency, int rate, int n_requests,
            std::string dist_type, std::string addr, std::string port);
 
+  Workload(int concurrency, int rate, int n_requests,
+           float alpha, std::string addr, std::string port);
+
   Workload(std::vector<unsigned>& rates,
            std::string addr, std::string port);
 
@@ -38,8 +41,16 @@ class Workload {
  private:
   std::vector<std::pair<double, int>> _traces;
   double elapsed_time;
-  std::vector<double> latencies;
-  std::vector<double> infer_times;
+
+  struct ResResult {
+    ResResult(const int model_id, const double latency, const double infer_time)
+      : model_id(model_id), latency(latency), infer_time(infer_time) {};
+
+    const int model_id;
+    const double latency;
+    const double infer_time;
+  };
+  std::vector<ResResult> res_results;
   int cold_start_cnt = 0;
 };
 

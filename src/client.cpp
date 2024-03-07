@@ -14,6 +14,7 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
   int slo = options.slo;
+  float alpha = options.alpha;
 
   int n_warmup = options.n_warmup;
   int n_test = rate * 100;
@@ -24,8 +25,12 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   std::cout << "Upload Model...\n";
   model_loader->run();
 
-  auto warmup = new Workload(concurrency, rate, n_warmup, dist_type, "127.0.0.1", "4321");
-  auto workload = new Workload(concurrency, rate, n_test, dist_type, "127.0.0.1", "4321");
+  if (dist_type == "uniform") {
+    alpha = 0.f;
+  }
+
+  auto warmup = new Workload(concurrency, rate, n_warmup, alpha, "127.0.0.1", "4321");
+  auto workload = new Workload(concurrency, rate, n_test, alpha, "127.0.0.1", "4321");
 
   std::cout << "Warmup...\n";
   warmup->run(model_loader->inputs);

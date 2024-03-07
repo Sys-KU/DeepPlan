@@ -32,6 +32,28 @@ Workload::Workload(int concurrency, int rate, int n_requests,
         }
       };
 
+Workload::Workload(int concurrency, int rate, int n_requests,
+                   float alpha, std::string addr, std::string port)
+    : concurrency(concurrency),
+      rate(rate),
+      n_requests(n_requests),
+      _traces(n_requests),
+      addr(addr),
+      port(port) {
+        std::minstd_rand gen(0);
+        std::exponential_distribution<double> edist(rate);
+
+        if (alpha < 0) {
+          throw std::runtime_error("The alpha value should be greater than 0");
+        }
+
+        rand_val(1);
+        for (auto& trace : _traces) {
+          trace.first = edist(gen);
+          trace.second = zipf(alpha, concurrency) - 1;
+        }
+      };
+
 Workload::Workload(std::vector<unsigned>& rates,
                    std::string addr, std::string port)
   : _traces(0),
@@ -75,13 +97,12 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
     usleep(interval*1e6);
 
     uint64_t t_send = util::now();
-    auto onSuccess = [this, t_send](serverapi::Response* rsp) {
+    auto onSuccess = [this, model_id, t_send](serverapi::Response* rsp) {
       auto response = dynamic_cast<serverapi::InferenceResponse*>(rsp);
       uint64_t t_receive = util::now();
       uint64_t latency = (t_receive-t_send) / 1e6;
 
-      this->latencies.push_back(latency);
-      this->infer_times.push_back(response->infer_time / 1000 / 1000); // ms
+      this->res_results.emplace_back(model_id, latency, response->infer_time);
       if (response->is_cold) this->cold_start_cnt++;
     };
 
@@ -96,6 +117,11 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
 
 WorkloadResult Workload::result(int slo) {
   WorkloadResult result;
+
+  std::vector<double> latencies;
+  for (auto& res_result : res_results) {
+    latencies.push_back(res_result.latency);
+  }
 
   std::sort(latencies.begin(), latencies.end());
 
@@ -120,9 +146,9 @@ void Workload::dump(std::string dump_file) {
 
   ofs.open(dump_file);
   if (ofs.is_open()) {
-    std::cout << "Dump inference times into '" << dump_file << "'\n";
-    for (auto time : infer_times) {
-      ofs << time << "\n";
+    std::cout << "Dump response results into '" << dump_file << "'\n";
+    for (auto& res_result : res_results) {
+      ofs << res_result.model_id << ", " << res_result.infer_time / 1e6 << "\n";
     }
   }
 
