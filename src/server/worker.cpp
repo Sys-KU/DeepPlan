@@ -235,7 +235,7 @@ void Worker::preempt_models() {
               running_models->pop(&evict_id));
           evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
 
-          if (evict_model->uncached_size >= 180 * MB) {
+          if (evict_model->uncached_size >= evict_model->optimal_size) {
             // Delegate the model to RR.
             partial_models->put(evict_id, evict_model);
           }
@@ -279,7 +279,7 @@ void Worker::preempt_models() {
               running_models->pop(&evict_id));
           evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
 
-          if (evict_model->uncached_size >= 180 * MB) {
+          if (evict_model->uncached_size >= evict_model->optimal_size) {
             // Delegate the model to CFR.
             cfr->put(evict_id, req_scoreboard->get(evict_id));
           }

@@ -11,7 +11,7 @@ import copy
 import time
 from collections import OrderedDict
 from typing import Tuple
-from proto.deepplan_pb2 import ModelConfig, Plan, ModelInput, DataType
+from proto.deepplan_pb2 import ModelConfig, Plan, ModelInput, DataType, OptimalPoint
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -325,6 +325,33 @@ def generate_dynamic_plan(layers):
 
     return dynamic_layers
 
+def explore_optimal_point(layers):
+    optimal_idx = 0
+    optimal_load_size = 0
+
+    exec_time = 0
+    for layer in layers:
+        exec_time += (
+            layer['cuda_exec_time'] if layer['exec_type'] == 0 else
+            layer['cuda_host_exec_time']
+        )
+
+    for i in range(len(layers)):
+        load_time = sum(
+            [l['load_time'] for l in layers[i:] if l['exec_type'] != 1]
+        )
+        if exec_time > load_time:
+           break
+
+        optimal_idx = i
+
+
+    optimal_load_size = sum(
+        [l['size'] for l in layers[optimal_idx:] if l['exec_type'] != 1]
+    )
+
+    return (optimal_idx, optimal_load_size)
+
 def generate_trace_module(model, x):
     layers = util.travel_layers(model)
     def hook(self, input: Tuple[torch.Tensor]):
@@ -398,7 +425,7 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
 
     def addPlan(model_config, layers, plan_type):
         plan = Plan()
-        plan.plan_type = plan_type;
+        plan.plan_type = plan_type
         load_layers = []
 
         for layer in layers:
@@ -408,6 +435,15 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
         plan.load_layers[:] = load_layers
         model_config.plans.append(plan)
 
+
+    def addOptimalPoint(model_config, engine_type, layer_idx, load_size):
+        optimal_point = OptimalPoint()
+        optimal_point.engine_type = engine_type
+        optimal_point.layer_idx = layer_idx
+        optimal_point.load_size = load_size
+        model_config.optimal_points.append(optimal_point)
+
+
     addInput(model_config, input_data)
     for layers, plan_type in zip(
                                 [static_layers, dynamic_layers, dynamic_layers],
@@ -415,6 +451,12 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
                                  Plan.PlanType.DYNAMIC,
                                  Plan.PlanType.BENCH_DYNAMIC]):
         addPlan(model_config, layers, plan_type)
+
+    for layers, engine_type in zip([naive_layers, dynamic_layers],
+                                   [OptimalPoint.EngineType.PIPESWITCH,
+                                    OptimalPoint.EngineType.DEEPPLAN]):
+        layer_idx, load_size = explore_optimal_point(layers)
+        addOptimalPoint(model_config, engine_type, layer_idx, load_size)
 
 
     util.write_to_pbtxt(model_config, os.path.join(output_dir_path, 'config.pbtxt'))

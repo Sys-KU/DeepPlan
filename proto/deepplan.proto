@@ -23,8 +23,20 @@ message Plan {
 	repeated uint32 load_layers = 2;
 }
 
+message OptimalPoint {
+  enum EngineType {
+    PIPESWITCH = 1;
+    DEEPPLAN = 2;
+  }
+
+  required EngineType engine_type = 1;
+  required uint32 layer_idx = 2;
+  required uint32 load_size = 3;
+}
+
 message ModelConfig {
 	required string model_name = 1;
 	repeated ModelInput inputs = 2;
 	repeated Plan plans = 3;
+  repeated OptimalPoint optimal_points = 4;
 }

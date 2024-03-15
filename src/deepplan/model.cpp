@@ -32,6 +32,14 @@ void Model::init() {
         this->load_state_maps.emplace_back(
             i, Device::CPU, util::getModuleSize(this->layers[i]));
       }
+
+      for (auto optimal_point : this->model_config.optimal_points()) {
+        if (OptimalPoint::PIPESWITCH == optimal_point.engine_type()) {
+          this->optimal_size = optimal_point.load_size();
+          this->optimal_idx = optimal_point.layer_idx();
+          break;
+        }
+      }
       break;
 
     case EngineType::DEEPPLAN:
@@ -49,6 +57,15 @@ void Model::init() {
           break;
         }
       }
+
+      for (auto optimal_point : this->model_config.optimal_points()) {
+        if (OptimalPoint::DEEPPLAN == optimal_point.engine_type()) {
+          this->optimal_size = optimal_point.load_size();
+          this->optimal_idx = optimal_point.layer_idx();
+          break;
+        }
+      }
+
       break;
     default:
       std::cerr << "Found incorrect EngineType\n";
