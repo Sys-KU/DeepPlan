@@ -7,6 +7,7 @@ void msg_inference_req_tx::set(serverapi::InferenceRequest& request) {
   msg.set_req_id(request.req_id);
   msg.set_model_id(request.model_id);
   msg.set_batch_size(request.batch_size);
+  msg.set_deadline(request.deadline);
   body_len_ = request.input_size;
   body_ = request.input;
 }
@@ -15,6 +16,7 @@ void msg_inference_req_rx::get(serverapi::InferenceRequest& request) {
   request.req_id = get_rx_req_id();
   request.model_id = msg.model_id();
   request.batch_size = msg.batch_size();
+  request.deadline = msg.deadline();
   request.input_size = body_len_;
   request.input = body_;
 }
@@ -40,6 +42,7 @@ void msg_upload_model_req_tx::set(serverapi::UploadModelRequest& request) {
   msg.set_engine_type(request.engine_type);
   msg.set_r_policy(request.r_policy);
   msg.set_mp_size(request.mp_size);
+  msg.set_slo_ms(request.slo_ms);
 }
 
 void msg_upload_model_req_rx::get(serverapi::UploadModelRequest& request) {
@@ -49,6 +52,7 @@ void msg_upload_model_req_rx::get(serverapi::UploadModelRequest& request) {
   request.engine_type = msg.engine_type();
   request.r_policy = msg.r_policy();
   request.mp_size = msg.mp_size();
+  request.slo_ms = msg.slo_ms();
 }
 
 void msg_upload_model_rsp_tx::set(serverapi::UploadModelResponse& response) {

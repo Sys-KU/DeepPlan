@@ -20,7 +20,7 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   int n_test = rate * 100;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, "127.0.0.1", "4321");
+                                      r_policy, mp_size, slo, "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();
@@ -63,7 +63,7 @@ void bursty_experiment(ClientOptions options) {
   ReclaimPolicy r_policy = options.r_policy;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, "127.0.0.1", "4321");
+                                      r_policy, mp_size, slo, "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();
@@ -101,7 +101,7 @@ void azure_experiment(ClientOptions options) {
   int slo = options.slo;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, "127.0.0.1", "4321");
+                                      r_policy, mp_size, slo, "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();

@@ -35,16 +35,15 @@ Worker::~Worker() {
 void Worker::run() {
   torch::NoGradGuard no_grad;
 
-  InferTask task;
+  std::vector<InferTask> batch_task;
 
   while (alive) {
-    while (queue_.try_pop(task)) {
-      auto request = task.request;
+    while (queue_.try_pop(batch_task)) {
       auto response = new serverapi::InferenceResponse();
       bool is_cold = false;
       double t1, t2;
 
-      int model_id = request->model_id;
+      int model_id = batch_task[0].request->model_id;
 
       auto model = find_model(model_id, &is_cold);
       if (model == nullptr) {
@@ -65,8 +64,12 @@ void Worker::run() {
       ScriptModuleInput inputs;
 
       for (auto input_config : model->input_configs) {
-        inputs.push_back(
-            input_config.get(request->input, request->batch_size).to(device));
+        std::vector<at::Tensor> input_tensors;
+        for (const auto& task : batch_task) {
+          input_tensors.push_back(
+              input_config.get(task.request->input, task.request->batch_size).to(device));
+        }
+        inputs.push_back(torch::cat(input_tensors));
       }
 
       t1 = util::now();
@@ -77,10 +80,12 @@ void Worker::run() {
 
       running_models->put(model_id, model);
 
-      response->req_id = request->req_id;
-      response->is_cold = is_cold;
-      response->infer_time = t2 - t1;
-      task.cb(response);
+      for (const auto& task : batch_task) {
+        response->req_id = task.request->req_id;
+        response->is_cold = is_cold;
+        response->infer_time = t2 - t1;
+        task.cb(response);
+      }
     }
   }
 }
@@ -362,9 +367,6 @@ void Worker::stop() {
   free_models();
 }
 
-void Worker::infer(
-    serverapi::InferenceRequest* request,
-    std::function<void(serverapi::InferenceResponse*)> cb) {
-  InferTask task(request, cb);
-  queue_.push(task);
+void Worker::infer(std::vector<InferTask> batch_task) {
+  queue_.push(batch_task);
 }

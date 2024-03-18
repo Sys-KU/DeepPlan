@@ -24,6 +24,10 @@ struct InferTask {
 
   serverapi::InferenceRequest* request;
   std::function<void(serverapi::InferenceResponse*)> cb;
+
+  bool operator<(const InferTask& other) const {
+    return request->arrival_time < other.request->arrival_time;
+  }
 };
 
 
@@ -138,9 +142,7 @@ class Worker {
 
   void run();
 
-  void infer(
-      serverapi::InferenceRequest* request,
-      std::function<void(serverapi::InferenceResponse*)> cb);
+  void infer(std::vector<InferTask> batch_task);
 
   void init_model_manager(EngineType engine_type);
 
@@ -174,5 +176,5 @@ class Worker {
   RequestScoreboard* req_scoreboard = nullptr;
   CFR* cfr;
   std::list<util::LRUCache<int, libtorch::Model*>*> partial_models_list;
-  tbb::concurrent_queue<InferTask> queue_;
+  tbb::concurrent_queue<std::vector<InferTask>> queue_;
 };

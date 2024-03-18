@@ -58,7 +58,7 @@ class ModelLoader {
  public:
   ModelLoader(std::vector<std::string> model_names, int n_models,
               EngineType engine_type, ReclaimPolicy r_policy,
-              int mp_size, std::string addr, std::string port);
+              int mp_size, int slo_ms, std::string addr, std::string port);
 
   void run();
 
@@ -70,6 +70,7 @@ class ModelLoader {
   EngineType engine_type;
   ReclaimPolicy r_policy;
   int mp_size;
+  int slo_ms;
   std::string addr;
   std::string port;
 };

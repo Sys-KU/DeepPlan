@@ -18,6 +18,8 @@ struct InferenceRequest : public Request {
  public:
   uint32_t model_id;
   uint32_t batch_size;
+  uint32_t deadline;
+  uint64_t arrival_time;
   size_t input_size;
   void* input;
 };
@@ -35,6 +37,7 @@ struct UploadModelRequest : public Request {
   uint32_t engine_type;
   uint32_t r_policy;
   uint32_t mp_size;
+  uint32_t slo_ms;
 };
 
 struct UploadModelResponse : public Response {

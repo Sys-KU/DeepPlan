@@ -20,6 +20,7 @@ set(SERVER_SRC
 		server/controller.cpp
 		server/model_manager.cpp
 		server/worker.cpp
+    server/scheduler.cpp
 )
 
 set(CLIENT_SRC
