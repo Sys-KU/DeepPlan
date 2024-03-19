@@ -14,30 +14,42 @@ message ModelInput {
 
 message Plan {
     enum PlanType {
-        STATIC = 1;
-        DYNAMIC = 2;
-        BENCH_DYNAMIC = 3;
+        NAIVE = 1;
+        STATIC = 2;
+        DYNAMIC = 3;
     }
 
     required PlanType plan_type = 1;
     repeated uint32 load_layers = 2;
 }
 
-message OptimalPoint {
+message Prof {
     enum EngineType {
         PIPESWITCH = 1;
         DEEPPLAN = 2;
     }
 
+    message ExecTime {
+        required uint32 batch_size = 1;
+        required double exec_ns  = 2;
+    }
+
+    message OptimalPoint {
+        required uint32 batch_size = 1;
+        required uint32 layer_idx = 2;
+        required uint32 load_size = 3;
+    }
+
     required EngineType engine_type = 1;
-    required uint32 layer_idx = 2;
-    required uint32 load_size = 3;
+    repeated ExecTime exec_times = 2;
+    repeated OptimalPoint optimal_points = 3;
+    repeated double layer_load_times = 4;
 }
 
 message ModelConfig {
     required string model_name = 1;
     repeated ModelInput inputs = 2;
     repeated Plan plans = 3;
-    repeated OptimalPoint optimal_points = 4;
+    repeated Prof profs = 4;
     required uint32 slo = 5;
 }

@@ -9,9 +9,14 @@ import argparse
 import logging
 import copy
 import time
+from typing import List
+from enum import Enum
+from dataclasses import dataclass
+
+
 from collections import OrderedDict
 from typing import Tuple
-from proto.deepplan_pb2 import ModelConfig, Plan, ModelInput, DataType, OptimalPoint
+from proto.deepplan_pb2 import ModelConfig, Plan, ModelInput, DataType, Prof
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -22,7 +27,7 @@ logger.addHandler(stream_handler)
 
 parser = argparse.ArgumentParser(description='DeepPlan Planner')
 parser.add_argument('--model_name', '-m', type=str, required=True)
-parser.add_argument('--batch_size', '-b', type=int, default=1)
+parser.add_argument('--max_batch_size', '-b', type=int, default=1)
 parser.add_argument('--slo', '-s', type=int, default=100)
 parser.add_argument('--plan_dir', '-p', type=str, required=True)
 parser.add_argument('--profile', action='store_true', required=False)
@@ -34,6 +39,27 @@ args = parser.parse_args()
 
 num_test = args.n_test
 num_warmup = args.n_warmup
+
+
+class EngineType(Enum):
+    PIPESWITCH = 1
+    DEEPPLAN = 2
+
+class ExecType(Enum):
+    LTE = 1  # Load-Then-Execute
+    DHA = 2  # Direct-Host-Access
+
+
+@dataclass
+class LayerProf:
+    index: int
+    layer_type: str
+    size: int
+    load_time: float
+    cuda_exec_time: float
+    cuda_host_exec_time: float
+    exec_type: ExecType = ExecType.LTE
+
 
 class MeasureRecorder():
     def __init__(self):
@@ -72,6 +98,7 @@ class MeasureRecorder():
     def reset(self):
         self.events = {}
 
+
 def print_layer_state_table(naive_layers, static_layers, dynamic_layers):
     boundary_lines = "=" * 78
     hyphens = "|{:<25}|{:<25}|{}".format('-'*25, '-'*25, '-'*25)
@@ -79,12 +106,12 @@ def print_layer_state_table(naive_layers, static_layers, dynamic_layers):
     print("|{:<25}|{:<25}|{}".format("Layer", "Initial approach", "DeepPlan (DHA)"))
     print(hyphens)
     for i, layer in enumerate(naive_layers):
-        layer_name = "{}-{}".format(layer['index'], layer['layer_type'])
-        load_naive_layer = "O" if layer['exec_type'] == 0 else "X"
-        load_static_layer = "O" if static_layers[i]['exec_type'] == 0 else "X"
-        load_dynamic_layer = "O" if dynamic_layers[i]['exec_type'] == 0 else "X"
+        layer_name = "{}-{}".format(layer.index, layer.layer_type)
+        load_naive_layer = "O" if layer.exec_type == ExecType.LTE else "X"
+        load_static_layer = "O" if static_layers[i].exec_type == ExecType.LTE else "X"
+        load_dynamic_layer = "O" if dynamic_layers[i].exec_type == ExecType.LTE else "X"
 
-        size = layer['size']
+        size = layer.size
         size /= (1024*1024)
 
         print("|{:<20} ({:.3f} MB) |{} {:<25}|{} {}".format(layer_name, size,
@@ -94,6 +121,7 @@ def print_layer_state_table(naive_layers, static_layers, dynamic_layers):
                                                "(direct-host-access)" if load_naive_layer != load_dynamic_layer else ""
                                                )),
     print(boundary_lines)
+
 
 def measure_load_layers(model):
     measure_rec = MeasureRecorder()
@@ -123,6 +151,7 @@ def measure_load_layers(model):
     load_times = load_times / num_test
 
     return load_times
+
 
 def measure_exec_layers(model, x):
     measure_rec = MeasureRecorder()
@@ -168,6 +197,7 @@ def measure_exec_layers(model, x):
 
     return exec_times
 
+
 def dump_profile_info(model, x, file_name):
     # Measure Load Time
     _layers = util.travel_layers(model)
@@ -183,9 +213,7 @@ def dump_profile_info(model, x, file_name):
     layer_cuda_host_exec_times = measure_exec_layers(model, x)
 
     # Measure GPU Direct Access Exec Time with benchmark
-
-    layer_info_list = []
-
+    layer_profs = []
     for i, layer in enumerate(_layers):
         size = 0
         for key, param in layer._parameters.items():
@@ -193,32 +221,31 @@ def dump_profile_info(model, x, file_name):
                 size += np.prod(np.array(param.size())) * 4
         for key, buf in layer._buffers.items():
             if buf is not None:
-                size += np.prod(np.array(param.size())) * 4
+                size += np.prod(np.array(buf.size())) * 4
 
-        layer_info = {
-                        'index': i,
-                        'layer_type': layer.__class__.__name__,
-                        'size': size,
-                        'load_time': layer_load_times[i],
-                        'cuda_exec_time': layer_cuda_exec_times[i],
-                        'cuda_host_exec_time': layer_cuda_host_exec_times[i],
-                        'exec_type': 0 # 0: Load Then Execution, 1: Remote Direct Access Execution 2: CPU
-                     }
+        layer_prof = LayerProf(index = i,
+                               layer_type = layer.__class__.__name__,
+                               size = size,
+                               load_time = layer_load_times[i],
+                               cuda_exec_time = layer_cuda_exec_times[i],
+                               cuda_host_exec_time = layer_cuda_host_exec_times[i])
 
-        layer_info_list.append(layer_info)
+        layer_profs.append(layer_prof)
 
     with open(file_name, 'wb') as f:
-        pickle.dump(layer_info_list, f)
+        pickle.dump(layer_profs, f)
 
-    return layer_info_list
+    return layer_profs
+
 
 def load_profile_info(file_name):
-    layer_info_list = []
+    layer_profs = []
 
     with open(file_name, 'rb') as f:
-        layer_info_list = pickle.load(f)
+        layer_profs = pickle.load(f)
 
-    return layer_info_list
+    return layer_profs
+
 
 def update_PEF(layers):
     ready_time = 0
@@ -231,30 +258,31 @@ def update_PEF(layers):
     for i, layer in enumerate(layers):
         stall_time = 0
         ready_time, run_time, _ = traces[-1]
-        if layer['exec_type'] == 0:
-            ready_time -= (layer['load_time'])
+        if layer.exec_type == ExecType.LTE:
+            ready_time -= (layer.load_time)
             if ready_time < 0:
                 stall_time += (-ready_time)
                 run_time   += (-ready_time)
                 ready_time = 0
 
-            ready_time += layer['cuda_exec_time']
-            run_time   += layer['cuda_exec_time']
-        elif layer['exec_type'] == 1:
-            ready_time += layer['cuda_host_exec_time']
-            run_time   += layer['cuda_host_exec_time']
+            ready_time += layer.cuda_exec_time
+            run_time   += layer.cuda_exec_time
+        elif layer.exec_type == ExecType.DHA:
+            ready_time += layer.cuda_host_exec_time
+            run_time   += layer.cuda_host_exec_time
 
         traces.append([ready_time, run_time, stall_time])
 
     return traces
+
 
 def generate_naive_layers(layers):
     naive_layers = copy.deepcopy(layers)
 
     # Naive
     for layer in naive_layers:
-        size = layer['size']
-        layer['exec_type'] = 0 if size > 0 else 1
+        size = layer.size
+        layer.exec_type = ExecType.LTE if size > 0 else ExecType.DHA
 
     return naive_layers
 
@@ -263,16 +291,15 @@ def generate_static_plan(layers):
     static_layers = generate_naive_layers(layers)
 
     for layer in static_layers:
-        layer_type = layer['layer_type']
+        layer_type = layer.layer_type
 
-        if layer['exec_type'] == 1: continue
+        if layer.exec_type == ExecType.DHA: continue
 
         if ("BatchNorm" in layer_type or
             "Embedding" in layer_type):
-            #"LayerNorm" in layer_name or
-            layer['exec_type'] = 1
-        elif layer['cuda_host_exec_time'] < (layer['cuda_exec_time'] + layer['load_time']):
-            layer['exec_type'] = 1
+            layer.exec_type = ExecType.DHA
+        elif layer.cuda_host_exec_time < (layer.cuda_exec_time + layer.load_time):
+            layer.exec_type = ExecType.DHA
 
     return static_layers
 
@@ -283,8 +310,8 @@ def generate_dynamic_plan(layers):
     traces = update_PEF(dynamic_layers) 
 
     def sort_func(x):
-        perf_gap = x['cuda_host_exec_time'] - x['cuda_exec_time']
-        load_time = x['load_time']
+        perf_gap = x.cuda_host_exec_time - x.cuda_exec_time
+        load_time = x.load_time
         return (perf_gap, -load_time)
         #return -load_time/perf_gap
 
@@ -296,13 +323,13 @@ def generate_dynamic_plan(layers):
         sorted_layers = sorted(dynamic_layers[:t], key = sort_func)
 
         for layer in sorted_layers[:t]:
-            if layer['exec_type'] == 1: continue
+            if layer.exec_type == ExecType.DHA: continue
 
             # Increased running time by convert the layer from load-then-execution to direct-host-access
-            perf_gap = layer['cuda_host_exec_time']-layer['cuda_exec_time']
+            perf_gap = layer.cuda_host_exec_time - layer.cuda_exec_time
 
             is_overload = False
-            if layer['cuda_host_exec_time'] > (layer['cuda_exec_time'] + 1.5*layer['load_time']):
+            if layer.cuda_host_exec_time > (layer.cuda_exec_time + 1.5 * layer.load_time):
                 is_overload = True
 
             should_convert_DA = True
@@ -314,10 +341,10 @@ def generate_dynamic_plan(layers):
 
             if should_convert_DA is False: break
 
-            index = layer['index']
-            dynamic_layers[index]['exec_type'] = 1
+            index = layer.index
+            dynamic_layers[index].exec_type = ExecType.DHA
 
-            stall_time = stall_time - layer['load_time'] - perf_gap
+            stall_time = stall_time - layer.load_time - perf_gap
             if stall_time <= 0:
                 traces = update_PEF(dynamic_layers)
                 break
@@ -326,32 +353,6 @@ def generate_dynamic_plan(layers):
 
     return dynamic_layers
 
-def explore_optimal_point(layers):
-    optimal_idx = 0
-    optimal_load_size = 0
-
-    exec_time = 0
-    for layer in layers:
-        exec_time += (
-            layer['cuda_exec_time'] if layer['exec_type'] == 0 else
-            layer['cuda_host_exec_time']
-        )
-
-    for i in range(len(layers)):
-        load_time = sum(
-            [l['load_time'] for l in layers[i:] if l['exec_type'] != 1]
-        )
-        if exec_time > load_time:
-           break
-
-        optimal_idx = i
-
-
-    optimal_load_size = sum(
-        [l['size'] for l in layers[optimal_idx:] if l['exec_type'] != 1]
-    )
-
-    return (optimal_idx, optimal_load_size)
 
 def generate_trace_module(model, x):
     layers = util.travel_layers(model)
@@ -359,12 +360,6 @@ def generate_trace_module(model, x):
         for name, param in self.named_parameters():
             if name in ['weight']:
                 torch.sync_tensor_(param, input[0])
-
-#        for parm in self.parameters():
-#            torch.sync_tensor_(parm, input[0])
-#        for buff in self.buffers():
-#            torch.sync_tensor_(buff, input[0])
-
         return input
 
     for layer in layers:
@@ -374,29 +369,8 @@ def generate_trace_module(model, x):
     trace_module = torch.jit.trace(model, x)
     return trace_module
 
-def generate_plan(model, x, slo, output_dir_path, do_profile=False, do_trace=False):
-    if not os.path.isdir(output_dir_path):
-        os.makedirs(output_dir_path)
 
-    profile_info_path = os.path.join(
-                            output_dir_path,
-                            f'model_batch_{batch_size}.pickle'
-                        )
-    layers = []
-    if (os.path.isfile(profile_info_path) is False) or (do_profile is True):
-        logging.info("Dumping profile info")
-
-        t1 = time.time()
-        layers = dump_profile_info(model, x, profile_info_path)
-        t2 = time.time()
-
-        logging.info(f"Measurement time for profiling: {(t2-t1)*1e3:.3f} ms")
-        logging.info("Dump completed")
-    else:
-        logging.info("Load profile info")
-        layers = load_profile_info(profile_info_path)
-        logging.info("Load completed")
-
+def generate_plan(layers, output_dir_path):
     logging.info("Creating plans")
     naive_layers = generate_naive_layers(layers)
     static_layers = generate_static_plan(layers)
@@ -404,65 +378,38 @@ def generate_plan(model, x, slo, output_dir_path, do_profile=False, do_trace=Fal
     t1 = time.time()
     dynamic_layers = generate_dynamic_plan(layers)
     t2 = time.time()
-    logging.info("All plans are generated")
 
-    print_layer_state_table(naive_layers, static_layers, dynamic_layers)
+    logging.info("All plans are generated")
     logging.info(f"Plan Generating Time: {(t2-t1)*1e3:.3f} ms")
 
-    model_config = ModelConfig()
-    model_config.model_name = model_name
-    model_config.slo = slo
+    print_layer_state_table(naive_layers, static_layers, dynamic_layers)
 
-    def addInput(model_config, input_data):
-        model_input = ModelInput()
-        dtype = input_data.dtype
-        if dtype == torch.float32:
-            model_input.data_type = DataType.TYPE_FP32
-        elif dtype == torch.int64:
-            model_input.data_type = DataType.TYPE_INT64
-        model_input.shape[:] = input_data.size()[1:]
-
-        model_config.inputs.append(model_input)
-
-
-    def addPlan(model_config, layers, plan_type):
+    plans = []
+    for layers, plan_type in zip(
+            [naive_layers, static_layers, dynamic_layers],
+            [Plan.PlanType.NAIVE,
+             Plan.PlanType.STATIC,
+             Plan.PlanType.DYNAMIC]):
         plan = Plan()
         plan.plan_type = plan_type
         load_layers = []
 
         for layer in layers:
-            if layer['exec_type'] == 0:
-                load_layers.append(layer['index'])
+            if layer.exec_type == ExecType.LTE:
+                load_layers.append(layer.index)
 
         plan.load_layers[:] = load_layers
-        model_config.plans.append(plan)
+        plans.append(plan)
+
+    return plans
 
 
-    def addOptimalPoint(model_config, engine_type, layer_idx, load_size):
-        optimal_point = OptimalPoint()
-        optimal_point.engine_type = engine_type
-        optimal_point.layer_idx = layer_idx
-        optimal_point.load_size = load_size
-        model_config.optimal_points.append(optimal_point)
+def save_trace_module(model_name, output_dir_path, do_trace=False):
+    model = models.import_model(model_name)
+    model.eval()
 
-
-    addInput(model_config, input_data)
-    for layers, plan_type in zip(
-                                [static_layers, dynamic_layers, dynamic_layers],
-                                [Plan.PlanType.STATIC,
-                                 Plan.PlanType.DYNAMIC,
-                                 Plan.PlanType.BENCH_DYNAMIC]):
-        addPlan(model_config, layers, plan_type)
-
-    for layers, engine_type in zip([naive_layers, dynamic_layers],
-                                   [OptimalPoint.EngineType.PIPESWITCH,
-                                    OptimalPoint.EngineType.DEEPPLAN]):
-        layer_idx, load_size = explore_optimal_point(layers)
-        addOptimalPoint(model_config, engine_type, layer_idx, load_size)
-
-
-    util.write_to_pbtxt(model_config, os.path.join(output_dir_path, 'config.pbtxt'))
-    logging.info("Model config is created")
+    input_data = models.import_data(model_name, 1)
+    input_data = input_data.cuda()
 
     for d in range(torch.cuda.device_count()):
         trace_module_path = os.path.join(output_dir_path, f'model{d}.pt')
@@ -479,9 +426,174 @@ def generate_plan(model, x, slo, output_dir_path, do_profile=False, do_trace=Fal
             logging.info("Saving completed")
 
 
+def generate_model_config(
+        model_name: str,
+        plans: List[Plan],
+        slo: int,
+        output_dir_path: str):
+    model_config = ModelConfig()
+    model_config.model_name = model_name
+    model_config.slo = slo
+
+    input_data = models.import_data(model_name, 1)
+    input_data = input_data.cuda()
+
+    def addInput(model_config, input_data):
+        model_input = ModelInput()
+        dtype = input_data.dtype
+        if dtype == torch.float32:
+            model_input.data_type = DataType.TYPE_FP32
+        elif dtype == torch.int64:
+            model_input.data_type = DataType.TYPE_INT64
+        model_input.shape[:] = input_data.size()[1:]
+
+        model_config.inputs.append(model_input)
+
+    def explore_optimal_point(layers):
+        optimal_idx = 0
+        optimal_load_size = 0
+
+        exec_time = 0
+        for layer in layers:
+            exec_time += (
+                layer.cuda_exec_time if layer.exec_type == ExecType.LTE else
+                layer.cuda_host_exec_time
+            )
+
+        for i in range(len(layers)):
+            load_time = sum(
+                [l.load_time for l in layers[i:] if l.exec_type != ExecType.DHA]
+            )
+            if exec_time > load_time:
+               break
+
+            optimal_idx = i
+
+
+        optimal_load_size = sum(
+            [l.size for l in layers[optimal_idx:] if l.exec_type != ExecType.DHA]
+        )
+
+        return (optimal_idx, optimal_load_size)
+
+    addInput(model_config, input_data)
+
+    for plan in plans:
+        model_config.plans.append(plan)
+
+    # Load the profiling data for the batch sizes
+    layer_profs_list = []
+    for batch_size in range(1, max_batch_size + 1):
+        profile_file = os.path.join(output_dir_path,
+                                    f'model_batch_{batch_size}.pickle')
+
+        layer_profs = load_profile_info(profile_file)
+        layer_profs_list.append((batch_size, layer_profs))
+
+
+    def get_load_layers(plans, engine_type):
+        if engine_type == Prof.EngineType.PIPESWITCH:
+            for plan in plans: 
+                if plan.plan_type == Plan.PlanType.NAIVE:
+                    return plan.load_layers
+        elif engine_type == Prof.EngineType.DEEPPLAN:
+            for plan in plans:
+                if plan.plan_type == Plan.PlanType.DYNAMIC:
+                    return plan.load_layers
+
+
+    # Fill ModelConfig.Prof
+    for engine_type in [Prof.EngineType.PIPESWITCH,
+                        Prof.EngineType.DEEPPLAN]:
+        prof = Prof()
+        prof.engine_type = engine_type
+        load_layers = get_load_layers(plans, engine_type)
+
+        for (batch_size, layer_profs) in layer_profs_list:
+            for layer in layer_profs:
+                if layer.index in load_layers:
+                    layer.exec_type = ExecType.LTE 
+                else:
+                    layer.exec_type = ExecType.DHA
+
+            exec_time = Prof.ExecTime()
+            exec_time.batch_size = batch_size
+            exec_ms = sum(
+                    layer.cuda_exec_time
+                    if layer.exec_type == ExecType.LTE
+                    else layer.cuda_host_exec_time
+                    for layer in layer_profs
+            ) 
+            exec_time.exec_ns = exec_ms * 1e6
+
+            prof.exec_times.append(exec_time)
+
+            optimal_point = Prof.OptimalPoint()
+            optimal_idx, optimal_load_size = explore_optimal_point(layer_profs)
+            optimal_point.batch_size = batch_size
+            optimal_point.layer_idx = optimal_idx
+            optimal_point.load_size = optimal_load_size
+
+            prof.optimal_points.append(optimal_point)
+
+        _, layers = layer_profs_list[0]
+        layer_load_times = [
+                layer.load_time
+                if layer.exec_type == ExecType.LTE else 0
+                for layer in layers
+        ]
+        prof.layer_load_times[:] = layer_load_times
+
+        model_config.profs.append(prof)
+
+
+    config_path = os.path.join(output_dir_path, 'config.pbtxt')
+    util.write_to_pbtxt(model_config, config_path)
+    logging.info(f"Model config is created at {config_path}")
+
+
+def profile_model(model_name, max_batch_size, output_dir_path, do_profile):
+    model = models.import_model(model_name)
+    model.eval()
+
+    if not os.path.isdir(output_dir_path):
+        os.makedirs(output_dir_path)
+
+    batch_layers = []
+    for batch_size in range(1, max_batch_size+1):
+        profile_file = os.path.join(
+                                output_dir_path,
+                                f'model_batch_{batch_size}.pickle'
+                            )
+
+        input_data = models.import_data(model_name, batch_size)
+        input_data = input_data.cuda()
+
+        if (os.path.isfile(profile_file) is False) or (do_profile is True):
+            logging.info("Dumping profile info")
+
+            t1 = time.time()
+            dump_profile_info(model, input_data, profile_file)
+            t2 = time.time()
+
+            logging.info(f"Measurement time for profiling: {(t2-t1)*1e3:.3f} ms")
+            logging.info("Dump completed")
+
+    profile_file = os.path.join(
+                            output_dir_path,
+                            f'model_batch_1.pickle'
+                        )
+    logging.info("Load profile info")
+    layers = load_profile_info(profile_file)
+    logging.info("Load completed")
+
+    return layers
+
+
 if __name__ == "__main__":
     model_name = args.model_name
-    batch_size = args.batch_size
+    max_batch_size = args.max_batch_size
+    plan_dir   = args.plan_dir
     plan_dir   = args.plan_dir
     do_profile = args.profile
     do_trace   = args.trace
@@ -490,10 +602,10 @@ if __name__ == "__main__":
     plan_dir_path = os.path.join(os.getcwd(), plan_dir)
     output_dir_path = os.path.join(plan_dir_path, model_name)
 
-    model = models.import_model(model_name)
-    model.eval()
+    layers = profile_model(model_name, max_batch_size, output_dir_path, do_profile)
 
-    input_data = models.import_data(model_name, batch_size)
-    input_data = input_data.cuda()
+    plans = generate_plan(layers, output_dir_path)
 
-    generate_plan(model, input_data, slo, output_dir_path, do_profile, do_trace)
+    save_trace_module(model_name, output_dir_path, do_trace)
+
+    generate_model_config(model_name, plans, slo, output_dir_path)

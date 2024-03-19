@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto2',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x0e\x64\x65\x65pplan.proto\"M\n\nModelInput\x12\x1c\n\tdata_type\x18\x01 \x02(\x0e\x32\t.DataType\x12\r\n\x05shape\x18\x02 \x03(\r\x12\x12\n\nmax_number\x18\x03 \x01(\r\"v\n\x04Plan\x12!\n\tplan_type\x18\x01 \x02(\x0e\x32\x0e.Plan.PlanType\x12\x13\n\x0bload_layers\x18\x02 \x03(\r\"6\n\x08PlanType\x12\n\n\x06STATIC\x10\x01\x12\x0b\n\x07\x44YNAMIC\x10\x02\x12\x11\n\rBENCH_DYNAMIC\x10\x03\"\x8f\x01\n\x0cOptimalPoint\x12-\n\x0b\x65ngine_type\x18\x01 \x02(\x0e\x32\x18.OptimalPoint.EngineType\x12\x11\n\tlayer_idx\x18\x02 \x02(\r\x12\x11\n\tload_size\x18\x03 \x02(\r\"*\n\nEngineType\x12\x0e\n\nPIPESWITCH\x10\x01\x12\x0c\n\x08\x44\x45\x45PPLAN\x10\x02\"\x88\x01\n\x0bModelConfig\x12\x12\n\nmodel_name\x18\x01 \x02(\t\x12\x1b\n\x06inputs\x18\x02 \x03(\x0b\x32\x0b.ModelInput\x12\x14\n\x05plans\x18\x03 \x03(\x0b\x32\x05.Plan\x12%\n\x0eoptimal_points\x18\x04 \x03(\x0b\x32\r.OptimalPoint\x12\x0b\n\x03slo\x18\x05 \x02(\r*9\n\x08\x44\x61taType\x12\r\n\tTYPE_FP32\x10\x01\x12\x0e\n\nTYPE_INT32\x10\x02\x12\x0e\n\nTYPE_INT64\x10\x03'
+  serialized_pb=b'\n\x0e\x64\x65\x65pplan.proto\"M\n\nModelInput\x12\x1c\n\tdata_type\x18\x01 \x02(\x0e\x32\t.DataType\x12\r\n\x05shape\x18\x02 \x03(\r\x12\x12\n\nmax_number\x18\x03 \x01(\r\"n\n\x04Plan\x12!\n\tplan_type\x18\x01 \x02(\x0e\x32\x0e.Plan.PlanType\x12\x13\n\x0bload_layers\x18\x02 \x03(\r\".\n\x08PlanType\x12\t\n\x05NAIVE\x10\x01\x12\n\n\x06STATIC\x10\x02\x12\x0b\n\x07\x44YNAMIC\x10\x03\"\xbe\x02\n\x04Prof\x12%\n\x0b\x65ngine_type\x18\x01 \x02(\x0e\x32\x10.Prof.EngineType\x12\"\n\nexec_times\x18\x02 \x03(\x0b\x32\x0e.Prof.ExecTime\x12*\n\x0eoptimal_points\x18\x03 \x03(\x0b\x32\x12.Prof.OptimalPoint\x12\x18\n\x10layer_load_times\x18\x04 \x03(\x01\x1a/\n\x08\x45xecTime\x12\x12\n\nbatch_size\x18\x01 \x02(\r\x12\x0f\n\x07\x65xec_ns\x18\x02 \x02(\x01\x1aH\n\x0cOptimalPoint\x12\x12\n\nbatch_size\x18\x01 \x02(\r\x12\x11\n\tlayer_idx\x18\x02 \x02(\r\x12\x11\n\tload_size\x18\x03 \x02(\r\"*\n\nEngineType\x12\x0e\n\nPIPESWITCH\x10\x01\x12\x0c\n\x08\x44\x45\x45PPLAN\x10\x02\"w\n\x0bModelConfig\x12\x12\n\nmodel_name\x18\x01 \x02(\t\x12\x1b\n\x06inputs\x18\x02 \x03(\x0b\x32\x0b.ModelInput\x12\x14\n\x05plans\x18\x03 \x03(\x0b\x32\x05.Plan\x12\x14\n\x05profs\x18\x04 \x03(\x0b\x32\x05.Prof\x12\x0b\n\x03slo\x18\x05 \x02(\r*9\n\x08\x44\x61taType\x12\r\n\tTYPE_FP32\x10\x01\x12\x0e\n\nTYPE_INT32\x10\x02\x12\x0e\n\nTYPE_INT64\x10\x03'
 )
 
 _DATATYPE = _descriptor.EnumDescriptor(
@@ -48,8 +48,8 @@ _DATATYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=502,
-  serialized_end=559,
+  serialized_start=651,
+  serialized_end=708,
 )
 _sym_db.RegisterEnumDescriptor(_DATATYPE)
 
@@ -67,17 +67,17 @@ _PLAN_PLANTYPE = _descriptor.EnumDescriptor(
   create_key=_descriptor._internal_create_key,
   values=[
     _descriptor.EnumValueDescriptor(
-      name='STATIC', index=0, number=1,
+      name='NAIVE', index=0, number=1,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
     _descriptor.EnumValueDescriptor(
-      name='DYNAMIC', index=1, number=2,
+      name='STATIC', index=1, number=2,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
     _descriptor.EnumValueDescriptor(
-      name='BENCH_DYNAMIC', index=2, number=3,
+      name='DYNAMIC', index=2, number=3,
       serialized_options=None,
       type=None,
       create_key=_descriptor._internal_create_key),
@@ -85,13 +85,13 @@ _PLAN_PLANTYPE = _descriptor.EnumDescriptor(
   containing_type=None,
   serialized_options=None,
   serialized_start=161,
-  serialized_end=215,
+  serialized_end=207,
 )
 _sym_db.RegisterEnumDescriptor(_PLAN_PLANTYPE)
 
-_OPTIMALPOINT_ENGINETYPE = _descriptor.EnumDescriptor(
+_PROF_ENGINETYPE = _descriptor.EnumDescriptor(
   name='EngineType',
-  full_name='OptimalPoint.EngineType',
+  full_name='Prof.EngineType',
   filename=None,
   file=DESCRIPTOR,
   create_key=_descriptor._internal_create_key,
@@ -109,10 +109,10 @@ _OPTIMALPOINT_ENGINETYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=319,
-  serialized_end=361,
+  serialized_start=486,
+  serialized_end=528,
 )
-_sym_db.RegisterEnumDescriptor(_OPTIMALPOINT_ENGINETYPE)
+_sym_db.RegisterEnumDescriptor(_PROF_ENGINETYPE)
 
 
 _MODELINPUT = _descriptor.Descriptor(
@@ -197,34 +197,72 @@ _PLAN = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=97,
-  serialized_end=215,
+  serialized_end=207,
 )
 
 
-_OPTIMALPOINT = _descriptor.Descriptor(
-  name='OptimalPoint',
-  full_name='OptimalPoint',
+_PROF_EXECTIME = _descriptor.Descriptor(
+  name='ExecTime',
+  full_name='Prof.ExecTime',
   filename=None,
   file=DESCRIPTOR,
   containing_type=None,
   create_key=_descriptor._internal_create_key,
   fields=[
     _descriptor.FieldDescriptor(
-      name='engine_type', full_name='OptimalPoint.engine_type', index=0,
-      number=1, type=14, cpp_type=8, label=2,
-      has_default_value=False, default_value=1,
+      name='batch_size', full_name='Prof.ExecTime.batch_size', index=0,
+      number=1, type=13, cpp_type=3, label=2,
+      has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='layer_idx', full_name='OptimalPoint.layer_idx', index=1,
+      name='exec_ns', full_name='Prof.ExecTime.exec_ns', index=1,
+      number=2, type=1, cpp_type=5, label=2,
+      has_default_value=False, default_value=float(0),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto2',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=363,
+  serialized_end=410,
+)
+
+_PROF_OPTIMALPOINT = _descriptor.Descriptor(
+  name='OptimalPoint',
+  full_name='Prof.OptimalPoint',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  create_key=_descriptor._internal_create_key,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='batch_size', full_name='Prof.OptimalPoint.batch_size', index=0,
+      number=1, type=13, cpp_type=3, label=2,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='layer_idx', full_name='Prof.OptimalPoint.layer_idx', index=1,
       number=2, type=13, cpp_type=3, label=2,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='load_size', full_name='OptimalPoint.load_size', index=2,
+      name='load_size', full_name='Prof.OptimalPoint.load_size', index=2,
       number=3, type=13, cpp_type=3, label=2,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -235,7 +273,6 @@ _OPTIMALPOINT = _descriptor.Descriptor(
   ],
   nested_types=[],
   enum_types=[
-    _OPTIMALPOINT_ENGINETYPE,
   ],
   serialized_options=None,
   is_extendable=False,
@@ -243,8 +280,61 @@ _OPTIMALPOINT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=218,
-  serialized_end=361,
+  serialized_start=412,
+  serialized_end=484,
+)
+
+_PROF = _descriptor.Descriptor(
+  name='Prof',
+  full_name='Prof',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  create_key=_descriptor._internal_create_key,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='engine_type', full_name='Prof.engine_type', index=0,
+      number=1, type=14, cpp_type=8, label=2,
+      has_default_value=False, default_value=1,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='exec_times', full_name='Prof.exec_times', index=1,
+      number=2, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='optimal_points', full_name='Prof.optimal_points', index=2,
+      number=3, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='layer_load_times', full_name='Prof.layer_load_times', index=3,
+      number=4, type=1, cpp_type=5, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+  ],
+  extensions=[
+  ],
+  nested_types=[_PROF_EXECTIME, _PROF_OPTIMALPOINT, ],
+  enum_types=[
+    _PROF_ENGINETYPE,
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto2',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=210,
+  serialized_end=528,
 )
 
 
@@ -278,7 +368,7 @@ _MODELCONFIG = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='optimal_points', full_name='ModelConfig.optimal_points', index=3,
+      name='profs', full_name='ModelConfig.profs', index=3,
       number=4, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
@@ -303,21 +393,25 @@ _MODELCONFIG = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=364,
-  serialized_end=500,
+  serialized_start=530,
+  serialized_end=649,
 )
 
 _MODELINPUT.fields_by_name['data_type'].enum_type = _DATATYPE
 _PLAN.fields_by_name['plan_type'].enum_type = _PLAN_PLANTYPE
 _PLAN_PLANTYPE.containing_type = _PLAN
-_OPTIMALPOINT.fields_by_name['engine_type'].enum_type = _OPTIMALPOINT_ENGINETYPE
-_OPTIMALPOINT_ENGINETYPE.containing_type = _OPTIMALPOINT
+_PROF_EXECTIME.containing_type = _PROF
+_PROF_OPTIMALPOINT.containing_type = _PROF
+_PROF.fields_by_name['engine_type'].enum_type = _PROF_ENGINETYPE
+_PROF.fields_by_name['exec_times'].message_type = _PROF_EXECTIME
+_PROF.fields_by_name['optimal_points'].message_type = _PROF_OPTIMALPOINT
+_PROF_ENGINETYPE.containing_type = _PROF
 _MODELCONFIG.fields_by_name['inputs'].message_type = _MODELINPUT
 _MODELCONFIG.fields_by_name['plans'].message_type = _PLAN
-_MODELCONFIG.fields_by_name['optimal_points'].message_type = _OPTIMALPOINT
+_MODELCONFIG.fields_by_name['profs'].message_type = _PROF
 DESCRIPTOR.message_types_by_name['ModelInput'] = _MODELINPUT
 DESCRIPTOR.message_types_by_name['Plan'] = _PLAN
-DESCRIPTOR.message_types_by_name['OptimalPoint'] = _OPTIMALPOINT
+DESCRIPTOR.message_types_by_name['Prof'] = _PROF
 DESCRIPTOR.message_types_by_name['ModelConfig'] = _MODELCONFIG
 DESCRIPTOR.enum_types_by_name['DataType'] = _DATATYPE
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
@@ -336,12 +430,28 @@ Plan = _reflection.GeneratedProtocolMessageType('Plan', (_message.Message,), {
   })
 _sym_db.RegisterMessage(Plan)
 
-OptimalPoint = _reflection.GeneratedProtocolMessageType('OptimalPoint', (_message.Message,), {
-  'DESCRIPTOR' : _OPTIMALPOINT,
+Prof = _reflection.GeneratedProtocolMessageType('Prof', (_message.Message,), {
+
+  'ExecTime' : _reflection.GeneratedProtocolMessageType('ExecTime', (_message.Message,), {
+    'DESCRIPTOR' : _PROF_EXECTIME,
+    '__module__' : 'deepplan_pb2'
+    # @@protoc_insertion_point(class_scope:Prof.ExecTime)
+    })
+  ,
+
+  'OptimalPoint' : _reflection.GeneratedProtocolMessageType('OptimalPoint', (_message.Message,), {
+    'DESCRIPTOR' : _PROF_OPTIMALPOINT,
+    '__module__' : 'deepplan_pb2'
+    # @@protoc_insertion_point(class_scope:Prof.OptimalPoint)
+    })
+  ,
+  'DESCRIPTOR' : _PROF,
   '__module__' : 'deepplan_pb2'
-  # @@protoc_insertion_point(class_scope:OptimalPoint)
+  # @@protoc_insertion_point(class_scope:Prof)
   })
-_sym_db.RegisterMessage(OptimalPoint)
+_sym_db.RegisterMessage(Prof)
+_sym_db.RegisterMessage(Prof.ExecTime)
+_sym_db.RegisterMessage(Prof.OptimalPoint)
 
 ModelConfig = _reflection.GeneratedProtocolMessageType('ModelConfig', (_message.Message,), {
   'DESCRIPTOR' : _MODELCONFIG,
