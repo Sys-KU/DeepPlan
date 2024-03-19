@@ -39,4 +39,5 @@ message ModelConfig {
 	repeated ModelInput inputs = 2;
 	repeated Plan plans = 3;
   repeated OptimalPoint optimal_points = 4;
+  required uint32 slo = 5;
 }

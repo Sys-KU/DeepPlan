@@ -3,6 +3,7 @@
 Scheduler::Scheduler(int device, const ServerOptions& options,
                      ModelPool* model_pool, std::string scheduler_name)
   : worker_(new Worker(device, options, model_pool)),
+    model_pool(model_pool),
     device(at::kCUDA, device),
     name(scheduler_name),
     options_(options) {
@@ -15,6 +16,8 @@ Scheduler::Scheduler(int device, const ServerOptions& options,
 void Scheduler::enqueue_request(
     serverapi::InferenceRequest* request,
     std::function<void(serverapi::InferenceResponse*)> cb) {
+  int slo_ms = model_pool->get_model(request->model_id)->model_config.slo();
+  request->deadline = request->arrival_time + slo_ms * 1e6;
   requests_.emplace(request, cb);
 }
 

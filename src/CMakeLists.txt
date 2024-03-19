@@ -2,6 +2,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 set(DEEPPLAN_SRC
 		util.cpp
+    time_util.cpp
     options.cpp
 		deepplan/model.cpp
 		deepplan/engine.cpp

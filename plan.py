@@ -23,6 +23,7 @@ logger.addHandler(stream_handler)
 parser = argparse.ArgumentParser(description='DeepPlan Planner')
 parser.add_argument('--model_name', '-m', type=str, required=True)
 parser.add_argument('--batch_size', '-b', type=int, default=1)
+parser.add_argument('--slo', '-s', type=int, default=100)
 parser.add_argument('--plan_dir', '-p', type=str, required=True)
 parser.add_argument('--profile', action='store_true', required=False)
 parser.add_argument('--trace', action='store_true', required=False)
@@ -373,7 +374,7 @@ def generate_trace_module(model, x):
     trace_module = torch.jit.trace(model, x)
     return trace_module
 
-def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
+def generate_plan(model, x, slo, output_dir_path, do_profile=False, do_trace=False):
     if not os.path.isdir(output_dir_path):
         os.makedirs(output_dir_path)
 
@@ -410,6 +411,7 @@ def generate_plan(model, x, output_dir_path, do_profile=False, do_trace=False):
 
     model_config = ModelConfig()
     model_config.model_name = model_name
+    model_config.slo = slo
 
     def addInput(model_config, input_data):
         model_input = ModelInput()
@@ -483,6 +485,7 @@ if __name__ == "__main__":
     plan_dir   = args.plan_dir
     do_profile = args.profile
     do_trace   = args.trace
+    slo        = args.slo
 
     plan_dir_path = os.path.join(os.getcwd(), plan_dir)
     output_dir_path = os.path.join(plan_dir_path, model_name)
@@ -493,4 +496,4 @@ if __name__ == "__main__":
     input_data = models.import_data(model_name, batch_size)
     input_data = input_data.cuda()
 
-    generate_plan(model, input_data, output_dir_path, do_profile, do_trace)
+    generate_plan(model, input_data, slo, output_dir_path, do_profile, do_trace)

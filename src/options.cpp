@@ -49,7 +49,7 @@ void ClientOptions::print_usage(char* program_name) {
       "\t\t--concurrency/-c CONCURRENCY --rate/-r RATE [--mp_size/-p MP_SIZE]\n"
       "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan,deepcache}]\n"
       "\t\t[--r_policy {rr, balance}]\n"
-      "\t\t[--slo/-s SLO] [--dump/-d] [--alpha/-a]\n",
+      "\t\t[--dump/-d] [--alpha/-a]\n",
       program_name);
 }
 
@@ -65,7 +65,6 @@ void ClientOptions::parseOptions(int argc, char** argv) {
     {"mp_size",       required_argument,  0,  'p' },
     {"engine",        required_argument,  0,  'e' },
     {"r_policy",      required_argument,  0,   0  },
-    {"slo",           required_argument,  0,  's' },
     {"alpha",         required_argument,  0,  'a' },
     {"dump",          required_argument,  0,  'd' },
     {0, 0, 0, 0}
@@ -90,11 +89,10 @@ void ClientOptions::parseOptions(int argc, char** argv) {
   this->n_test    = 10000;
   this->engine_type = EngineType::DEEPPLAN;
   this->r_policy  = ReclaimPolicy::RR;
-  this->slo       = 100;
   this->alpha     = 1.5;
   this->dump      = "";
 
-  while ((flag = getopt_long(argc, argv, "a:c:d:e:hm:r:s:w:p:", long_options, &option_index)) != -1) {
+  while ((flag = getopt_long(argc, argv, "a:c:d:e:hm:r:w:p:", long_options, &option_index)) != -1) {
     switch (flag) {
       case 0:
         if (long_options[option_index].flag != 0)
@@ -151,9 +149,6 @@ void ClientOptions::parseOptions(int argc, char** argv) {
         break;
       case 'p':
         this->mp_size = (int)strtol(optarg, NULL, 10);
-        break;
-      case 's':
-        this->slo = (int)strtol(optarg, NULL, 10);
         break;
       case 'e':
         found = false;

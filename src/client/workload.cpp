@@ -1,5 +1,6 @@
 #include <client/workload.h>
 #include <client/genzipf.h>
+#include <time_util.h>
 
 Workload::Workload(int concurrency, int rate, int n_requests,
                    std::string dist_type, std::string addr, std::string port)
@@ -99,10 +100,13 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
     uint64_t t_send = util::now();
     auto onSuccess = [this, model_id, t_send](serverapi::Response* rsp) {
       auto response = dynamic_cast<serverapi::InferenceResponse*>(rsp);
-      uint64_t t_receive = util::now();
-      uint64_t latency = (t_receive-t_send) / 1e6;
+      uint64_t deadline = response->deadline;
+      uint64_t response_time = response->response_time;
+      uint64_t arrival_time = response->arrival_time;
+      uint64_t latency = (response_time - arrival_time) / 1e6;
+      bool good = (response_time <= deadline);
 
-      this->res_results.emplace_back(model_id, latency, response->infer_time);
+      this->res_results.emplace_back(model_id, latency, response->infer_time, good);
       if (response->is_cold) this->cold_start_cnt++;
     };
 
@@ -115,27 +119,26 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
   this->elapsed_time = (t2-t1) / 1e6;  // ms
 }
 
-WorkloadResult Workload::result(int slo) {
+WorkloadResult Workload::result() {
   WorkloadResult result;
 
+  int goodput_cnt = 0 ;
   std::vector<double> latencies;
   for (auto& res_result : res_results) {
     latencies.push_back(res_result.latency);
+    goodput_cnt += res_result.good;
   }
 
   std::sort(latencies.begin(), latencies.end());
 
   int index_50 = latencies.size() * 0.5 - 1;
   int index_99 = latencies.size() * 0.99 - 1;
-  int goodput_cnt = 0;
-
-  for (auto& latency : latencies)
-    if (latency <= slo) goodput_cnt++;
 
   result.throughput = n_requests / (elapsed_time / 1e3);  // requests per sec
   result.latency_50 = latencies[index_50];
   result.latency_99 = latencies[index_99];
   result.cold_rate = (double)cold_start_cnt / n_requests * 100;
+  result.goodput_rs = (double)goodput_cnt / (elapsed_time / 1e3);  // r/s
   result.goodput_rate = (double)goodput_cnt / n_requests * 100;
 
   return result;
@@ -157,13 +160,12 @@ void Workload::dump(std::string dump_file) {
 
 ModelLoader::ModelLoader(std::vector<std::string> model_names, int n_models,
                          EngineType engine_type, ReclaimPolicy r_policy,
-                         int mp_size, int slo_ms, std::string addr, std::string port)
+                         int mp_size, std::string addr, std::string port)
   : model_names(model_names),
     n_models(n_models),
     engine_type(engine_type),
     r_policy(r_policy),
     mp_size(mp_size),
-    slo_ms(slo_ms),
     addr(addr),
     port(port) {};
 
@@ -179,7 +181,7 @@ void ModelLoader::run() {
     input_generator.generate_input(model_names[i/n_models_per_type], 1, &inputs[i]);
   }
 
-  client.upload_model(model_names, n_models, engine_type, r_policy, mp_size, slo_ms);
+  client.upload_model(model_names, n_models, engine_type, r_policy, mp_size);
 
   for (int i = 0; i < n_models; i++) {
     auto onSuccess = [this](serverapi::Response* rsp) {};

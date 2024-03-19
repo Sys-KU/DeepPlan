@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto2',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x0e\x64\x65\x65pplan.proto\"M\n\nModelInput\x12\x1c\n\tdata_type\x18\x01 \x02(\x0e\x32\t.DataType\x12\r\n\x05shape\x18\x02 \x03(\r\x12\x12\n\nmax_number\x18\x03 \x01(\r\"v\n\x04Plan\x12!\n\tplan_type\x18\x01 \x02(\x0e\x32\x0e.Plan.PlanType\x12\x13\n\x0bload_layers\x18\x02 \x03(\r\"6\n\x08PlanType\x12\n\n\x06STATIC\x10\x01\x12\x0b\n\x07\x44YNAMIC\x10\x02\x12\x11\n\rBENCH_DYNAMIC\x10\x03\"\x8f\x01\n\x0cOptimalPoint\x12-\n\x0b\x65ngine_type\x18\x01 \x02(\x0e\x32\x18.OptimalPoint.EngineType\x12\x11\n\tlayer_idx\x18\x02 \x02(\r\x12\x11\n\tload_size\x18\x03 \x02(\r\"*\n\nEngineType\x12\x0e\n\nPIPESWITCH\x10\x01\x12\x0c\n\x08\x44\x45\x45PPLAN\x10\x02\"{\n\x0bModelConfig\x12\x12\n\nmodel_name\x18\x01 \x02(\t\x12\x1b\n\x06inputs\x18\x02 \x03(\x0b\x32\x0b.ModelInput\x12\x14\n\x05plans\x18\x03 \x03(\x0b\x32\x05.Plan\x12%\n\x0eoptimal_points\x18\x04 \x03(\x0b\x32\r.OptimalPoint*9\n\x08\x44\x61taType\x12\r\n\tTYPE_FP32\x10\x01\x12\x0e\n\nTYPE_INT32\x10\x02\x12\x0e\n\nTYPE_INT64\x10\x03'
+  serialized_pb=b'\n\x0e\x64\x65\x65pplan.proto\"M\n\nModelInput\x12\x1c\n\tdata_type\x18\x01 \x02(\x0e\x32\t.DataType\x12\r\n\x05shape\x18\x02 \x03(\r\x12\x12\n\nmax_number\x18\x03 \x01(\r\"v\n\x04Plan\x12!\n\tplan_type\x18\x01 \x02(\x0e\x32\x0e.Plan.PlanType\x12\x13\n\x0bload_layers\x18\x02 \x03(\r\"6\n\x08PlanType\x12\n\n\x06STATIC\x10\x01\x12\x0b\n\x07\x44YNAMIC\x10\x02\x12\x11\n\rBENCH_DYNAMIC\x10\x03\"\x8f\x01\n\x0cOptimalPoint\x12-\n\x0b\x65ngine_type\x18\x01 \x02(\x0e\x32\x18.OptimalPoint.EngineType\x12\x11\n\tlayer_idx\x18\x02 \x02(\r\x12\x11\n\tload_size\x18\x03 \x02(\r\"*\n\nEngineType\x12\x0e\n\nPIPESWITCH\x10\x01\x12\x0c\n\x08\x44\x45\x45PPLAN\x10\x02\"\x88\x01\n\x0bModelConfig\x12\x12\n\nmodel_name\x18\x01 \x02(\t\x12\x1b\n\x06inputs\x18\x02 \x03(\x0b\x32\x0b.ModelInput\x12\x14\n\x05plans\x18\x03 \x03(\x0b\x32\x05.Plan\x12%\n\x0eoptimal_points\x18\x04 \x03(\x0b\x32\r.OptimalPoint\x12\x0b\n\x03slo\x18\x05 \x02(\r*9\n\x08\x44\x61taType\x12\r\n\tTYPE_FP32\x10\x01\x12\x0e\n\nTYPE_INT32\x10\x02\x12\x0e\n\nTYPE_INT64\x10\x03'
 )
 
 _DATATYPE = _descriptor.EnumDescriptor(
@@ -48,8 +48,8 @@ _DATATYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=488,
-  serialized_end=545,
+  serialized_start=502,
+  serialized_end=559,
 )
 _sym_db.RegisterEnumDescriptor(_DATATYPE)
 
@@ -284,6 +284,13 @@ _MODELCONFIG = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='slo', full_name='ModelConfig.slo', index=4,
+      number=5, type=13, cpp_type=3, label=2,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -296,8 +303,8 @@ _MODELCONFIG = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=363,
-  serialized_end=486,
+  serialized_start=364,
+  serialized_end=500,
 )
 
 _MODELINPUT.fields_by_name['data_type'].enum_type = _DATATYPE

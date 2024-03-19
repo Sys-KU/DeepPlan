@@ -16,13 +16,15 @@ message InferenceReqProto {
 	required uint32 req_id = 1;
 	required uint32 model_id = 2;
 	required uint32 batch_size = 3;
-  required uint32 deadline = 4;
 }
 
 message InferenceRspProto {
 	required uint32 req_id = 1;
 	required bool is_cold = 2;
 	required double infer_time = 3;
+  required uint64 arrival_time = 4;
+  required uint64 response_time = 5;
+  required uint64 deadline = 6;
 }
 
 message UploadModelReqProto {
@@ -32,7 +34,6 @@ message UploadModelReqProto {
 	required uint32 engine_type = 4;
 	required uint32 r_policy = 5;
 	required uint32 mp_size = 6;
-  required uint32 slo_ms = 7;
 }
 
 message UploadModelRspProto {

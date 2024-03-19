@@ -26,7 +26,7 @@ struct InferTask {
   std::function<void(serverapi::InferenceResponse*)> cb;
 
   bool operator<(const InferTask& other) const {
-    return request->arrival_time < other.request->arrival_time;
+    return request->deadline < other.request->deadline;
   }
 };
 

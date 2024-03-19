@@ -13,14 +13,13 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   int mp_size = options.mp_size;
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
-  int slo = options.slo;
   float alpha = options.alpha;
 
   int n_warmup = options.n_warmup;
   int n_test = rate * 100;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, slo, "127.0.0.1", "4321");
+                                      r_policy, mp_size, "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();
@@ -38,13 +37,14 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   std::cout << "Test...\n";
   workload->run(model_loader->inputs);
 
-  auto result = workload->result(slo);
+  auto result = workload->result();
 
   std::cout << "=======================================\n";
   std::cout << "Throughput: " << result.throughput << " r/s\n";
   std::cout << "50% Latency: " << result.latency_50 << " ms\n";
   std::cout << "99% Latency: " << result.latency_99 << " ms\n";
   std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
+  std::cout << "Goodput: " << result.goodput_rs << " r/s\n";
   std::cout << "Goodput Rate: " << result.goodput_rate << " %\n";
   std::cout << "=======================================\n";
 
@@ -58,12 +58,11 @@ void bursty_experiment(ClientOptions options) {
   int concurrency = options.concurrency;
   int rate = options.rate;
   int mp_size = options.mp_size;
-  int slo = options.slo;
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, slo, "127.0.0.1", "4321");
+                                      r_policy, mp_size, "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();
@@ -81,7 +80,7 @@ void bursty_experiment(ClientOptions options) {
   for (int i = 0; i < concurrency; i++) {
     warmups[i]->run(model_loader->inputs);
     workloads[i]->run(model_loader->inputs);
-    auto result = workloads[i]->result(slo);
+    auto result = workloads[i]->result();
 
     std::cout << i+1 << ", ";
     std::cout << result.latency_99 << ", ";
@@ -98,10 +97,8 @@ void azure_experiment(ClientOptions options) {
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
 
-  int slo = options.slo;
-
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, slo, "127.0.0.1", "4321");
+                                      r_policy, mp_size, "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();
@@ -120,7 +117,7 @@ void azure_experiment(ClientOptions options) {
   std::cout << "Minutes, Offered Load, 99% Latecny(ms), Cold Start Rate(%), Goodput Rate(%)\n";
   for (int p = 0; p < period; p++) {
     workloads[p]->run(model_loader->inputs);
-    auto result = workloads[p]->result(slo);
+    auto result = workloads[p]->result();
 
     std::cout << p << ", ";
     std::cout << workloads[p]->n_requests << ", ";

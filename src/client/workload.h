@@ -9,6 +9,7 @@ struct WorkloadResult {
   double latency_50;
   double latency_99;
   double cold_rate;
+  double goodput_rs;
   double goodput_rate;
 };
 
@@ -25,7 +26,7 @@ class Workload {
 
   void run(std::vector<std::vector<char>>& inputs);
 
-  WorkloadResult result(int slo);
+  WorkloadResult result();
 
   void dump(std::string dump_file);
 
@@ -43,12 +44,15 @@ class Workload {
   double elapsed_time;
 
   struct ResResult {
-    ResResult(const int model_id, const double latency, const double infer_time)
-      : model_id(model_id), latency(latency), infer_time(infer_time) {};
+    ResResult(const int model_id, const double latency, const double infer_time,
+              const bool good)
+      : model_id(model_id), latency(latency), infer_time(infer_time),
+        good(good) {};
 
     const int model_id;
     const double latency;
     const double infer_time;
+    const bool good;
   };
   std::vector<ResResult> res_results;
   int cold_start_cnt = 0;
@@ -58,7 +62,7 @@ class ModelLoader {
  public:
   ModelLoader(std::vector<std::string> model_names, int n_models,
               EngineType engine_type, ReclaimPolicy r_policy,
-              int mp_size, int slo_ms, std::string addr, std::string port);
+              int mp_size, std::string addr, std::string port);
 
   void run();
 
@@ -70,7 +74,6 @@ class ModelLoader {
   EngineType engine_type;
   ReclaimPolicy r_policy;
   int mp_size;
-  int slo_ms;
   std::string addr;
   std::string port;
 };

@@ -2,6 +2,7 @@
 #include <server/worker.h>
 #include <network/session.h>
 #include <util.h>
+#include <time_util.h>
 #include <options.h>
 #include <deepplan/engine.h>
 #include <sstream>
@@ -48,10 +49,9 @@ void Controller::run() {
         infer->model_id = model_id / n_workers;
 
         auto cb = [message](serverapi::InferenceResponse* response) {
+          response->response_time = util::now();
           message.srv_session->send_response(response);
         };
-
-        infer->arrival_time = util::now();
 
         schedulers[worker_id]->enqueue_request(infer, cb);
       }
@@ -61,11 +61,10 @@ void Controller::run() {
         EngineType engine_type = static_cast<EngineType>(upload_model->engine_type);
         ReclaimPolicy r_policy = static_cast<ReclaimPolicy>(upload_model->r_policy);
         int mp_size = upload_model->mp_size;
-        int slo_ms = upload_model->slo_ms;
 
         auto response = new serverapi::UploadModelResponse();
 
-        setup_models(model_names, n_models, engine_type, r_policy, mp_size, slo_ms);
+        setup_models(model_names, n_models, engine_type, r_policy, mp_size);
 
         response->req_id = upload_model->req_id;
         message.srv_session->send_response(response);
@@ -81,9 +80,11 @@ void Controller::run() {
   }
 }
 
-void Controller::setup_models(std::vector<std::string> model_names, int n_models,
-                              EngineType engine_type, ReclaimPolicy r_policy,
-                              int mp_size, int slo_ms) {
+void Controller::setup_models(std::vector<std::string> model_names,
+                              int n_models,
+                              EngineType engine_type,
+                              ReclaimPolicy r_policy,
+                              int mp_size) {
   for (int i = 0; i < schedulers.size(); i++) {
     schedulers[i]->clear_models();
     schedulers[i]->set_r_policy(r_policy);

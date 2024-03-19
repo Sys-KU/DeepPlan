@@ -30,6 +30,8 @@ class Scheduler {
 
   std::string name;
 
+  ModelPool* model_pool;
+
  private:
   Worker* worker_;
 

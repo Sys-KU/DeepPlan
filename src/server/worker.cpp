@@ -1,5 +1,6 @@
 #include <torch/cuda.h>
 #include <util.h>
+#include <time_util.h>
 #include <options.h>
 #include <server/worker.h>
 #include <server/model_manager.h>

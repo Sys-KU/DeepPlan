@@ -19,7 +19,7 @@ class Client {
 
   serverapi::UploadModelResponse* upload_model(
       std::vector<std::string> model_name, int n_models, EngineType engine_type,
-      ReclaimPolicy r_policy, int mp_size, int slo_ms);
+      ReclaimPolicy r_policy, int mp_size);
 
   void close();
 

@@ -12,6 +12,7 @@
 #include <deepplan/model.h>
 #include <deepplan/engine.h>
 #include <util.h>
+#include <time_util.h>
 
 struct BenchmarkOptions {
   std::string model_name;

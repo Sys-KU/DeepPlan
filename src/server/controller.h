@@ -20,9 +20,11 @@ class Controller {
 
   void shutdown();
 
-  void setup_models(std::vector<std::string> model_name, int n_models,
-                    EngineType engine_type, ReclaimPolicy r_policy,
-                    int mp_size, int slo_ms);
+  void setup_models(std::vector<std::string> model_name,
+                    int n_models,
+                    EngineType engine_type,
+                    ReclaimPolicy r_policy,
+                    int mp_size);
 
  private:
   std::atomic_bool alive;

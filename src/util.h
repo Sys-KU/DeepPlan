@@ -3,7 +3,6 @@
 #include <torch/script.h>
 #include <vector>
 #include <map>
-#include <chrono>
 #include <cstdint>
 #include <deepplan.pb.h>
 #include <google/protobuf/text_format.h>
@@ -67,14 +66,6 @@ struct InputConfig {
 };
 
 namespace util {
-
-typedef std::chrono::steady_clock::time_point time_point;
-
-time_point hrt();
-
-std::uint64_t now();
-
-std::uint64_t nanos(time_point t);
 
 template <typename T>
 bool read_from_pbtxt(T& config, const std::string path) {
