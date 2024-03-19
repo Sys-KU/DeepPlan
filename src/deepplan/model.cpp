@@ -33,11 +33,14 @@ void Model::init() {
             i, Device::CPU, util::getModuleSize(this->layers[i]));
       }
 
-      for (auto optimal_point : this->model_config.optimal_points()) {
-        if (OptimalPoint::PIPESWITCH == optimal_point.engine_type()) {
-          this->optimal_size = optimal_point.load_size();
-          this->optimal_idx = optimal_point.layer_idx();
-          break;
+      for (auto prof : this->model_config.profs()) {
+        if (Prof::PIPESWITCH == prof.engine_type()) {
+            for (auto optimal_point : prof.optimal_points()) {
+                this->optimal_size = optimal_point.load_size();
+                this->optimal_idx = optimal_point.layer_idx();
+                break;
+            }
+            break;
         }
       }
       break;
@@ -58,11 +61,14 @@ void Model::init() {
         }
       }
 
-      for (auto optimal_point : this->model_config.optimal_points()) {
-        if (OptimalPoint::DEEPPLAN == optimal_point.engine_type()) {
-          this->optimal_size = optimal_point.load_size();
-          this->optimal_idx = optimal_point.layer_idx();
-          break;
+      for (auto prof : this->model_config.profs()) {
+        if (Prof::DEEPPLAN == prof.engine_type()) {
+            for (auto optimal_point : prof.optimal_points()) {
+                this->optimal_size = optimal_point.load_size();
+                this->optimal_idx = optimal_point.layer_idx();
+                break;
+            }
+            break;
         }
       }
 
