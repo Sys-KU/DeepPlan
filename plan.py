@@ -537,11 +537,11 @@ def generate_model_config(
             prof.optimal_points.append(optimal_point)
 
         _, layers = layer_profs_list[0]
-        layer_load_times = [
-                layer.load_time
-                if layer.exec_type == ExecType.LTE else 0
-                for layer in layers
-        ]
+        layer_load_times = []
+        for layer in layers:
+            if layer.exec_type == ExecType.LTE:
+                layer_load_times.append(layer.load_time) 
+
         prof.layer_load_times[:] = layer_load_times
 
         model_config.profs.append(prof)
