@@ -40,6 +40,12 @@ void Worker::run() {
 
   std::vector<InferTask> batch_task;
 
+  double total_sched_time = 0;
+  double total_infer_time = 0;
+  int num_reqs = 0;
+  int num_colds = 0;
+  double last_logging_time = 0.f;
+
   while (alive) {
     while (queue_.try_pop(batch_task)) {
       auto response = new serverapi::InferenceResponse();
@@ -58,10 +64,18 @@ void Worker::run() {
 
       req_scoreboard->update_window(model_id);
 
+      t1 = util::now();
+
       size_t uncached_size = dynamic_cast<deepplan::Model*>(model)->uncached_size;
       while ((getDeviceActiveMemorySize(device.index()) + uncached_size)
              >= capacity_) {
         preempt_models();
+      }
+
+      t2 = util::now();
+      total_sched_time += ((t2-t1) / 1e6);
+      if (is_cold == true) {
+        num_colds++;
       }
 
       ScriptModuleInput inputs;
@@ -87,15 +101,29 @@ void Worker::run() {
         response->req_id = task.request->req_id;
         response->is_cold = is_cold;
         response->infer_time = t2 - t1;
+        response->arrival_time = task.request->arrival_time;
+        response->deadline = task.request->deadline;
         task.cb(response);
       }
-    }
-  }
-}
 
-void Worker::init_model_manager(EngineType engine_type) {
-  if (model_manager == nullptr) {
-    model_manager = new ModelManager(engine_type);
+      total_infer_time += ((t2 - t1) / 1e6);
+      num_reqs++;
+
+      auto now = util::now() / 1e6;
+      if ((now - last_logging_time) > 5000) {
+        std::cout << "[INFO] ";
+        std::cout << "infer time: " << total_infer_time / num_reqs << ", ";
+        std::cout << "scheduling time: " << total_sched_time / num_reqs << " ms, ";
+        std::cout << "num cold starts: " << num_colds << "\n";
+
+        total_infer_time = 0;
+        total_sched_time = 0;
+        num_colds = 0;
+        num_reqs = 0;
+
+        last_logging_time = now;
+      }
+    }
   }
 }
 
