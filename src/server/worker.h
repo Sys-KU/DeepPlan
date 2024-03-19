@@ -137,19 +137,15 @@ class CFR {
 
 class Worker {
  public:
-  Worker(int device, const ServerOptions& options, std::string name="");
+  Worker(int device, const ServerOptions& options,
+         ModelPool* model_pool, std::string name="");
   ~Worker();
 
   void run();
 
   void infer(std::vector<InferTask> batch_task);
 
-  void init_model_manager(EngineType engine_type);
-
   void set_r_policy(ReclaimPolicy r_policy);
-
-  void add_models(std::vector<std::string> model_names, int n_models,
-                  EngineType engine_type, std::vector<int> devices);
 
   libtorch::Model* find_model(int model_id, bool* is_cold);
 
@@ -157,7 +153,7 @@ class Worker {
 
   void clear_models();
 
-  void free_models();
+  void sync_setup();
 
   void stop();
 
@@ -170,7 +166,7 @@ class Worker {
   size_t capacity_;
   std::atomic_bool alive;
   std::thread worker_thr;
-  ModelManager* model_manager = nullptr;
+  ModelPool* model_pool;
   ReclaimPolicy r_policy_;
   util::LRUCache<int, libtorch::Model*>* running_models;
   RequestScoreboard* req_scoreboard = nullptr;

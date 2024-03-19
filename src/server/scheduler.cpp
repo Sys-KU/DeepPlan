@@ -1,7 +1,8 @@
 #include <server/scheduler.h>
 
-Scheduler::Scheduler(int device, const ServerOptions& options, std::string scheduler_name)
-  : worker_(new Worker(device, options)),
+Scheduler::Scheduler(int device, const ServerOptions& options,
+                     ModelPool* model_pool, std::string scheduler_name)
+  : worker_(new Worker(device, options, model_pool)),
     device(at::kCUDA, device),
     name(scheduler_name),
     options_(options) {
@@ -41,22 +42,12 @@ void Scheduler::clear_models() {
   worker_->clear_models();
 }
 
-void Scheduler::add_models(std::vector<std::string> model_names, int n_models,
-                           EngineType engine_type, int slo_ms,
-                           std::vector<int> devices) {
-  worker_->add_models(model_names, n_models, engine_type, devices);
-}
-
-void Scheduler::reset_models(std::vector<std::string> model_names, int n_models,
-                             EngineType engine_type, int slo_ms,
-                             std::vector<int> devices) {
-  worker_->free_models();
-  worker_->init_model_manager(engine_type);
-  worker_->add_models(model_names, n_models, engine_type, devices);
-}
-
 void Scheduler::set_r_policy(ReclaimPolicy r_policy) {
   worker_->set_r_policy(r_policy);
+}
+
+void Scheduler::sync_setup() {
+  worker_->sync_setup();
 }
 
 void Scheduler::stop() {

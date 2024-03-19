@@ -7,10 +7,12 @@
 #include <cuda_runtime_api.h>
 #include <c10/cuda/CUDACachingAllocator.h>
 
-Worker::Worker(int device, const ServerOptions& options, std::string worker_name)
+Worker::Worker(int device, const ServerOptions& options,
+               ModelPool* model_pool, std::string worker_name)
   : device(at::kCUDA, device),
     name(worker_name),
     options_(options),
+    model_pool(model_pool),
     alive(true) {
       if (name.empty()) {
         name = "Worker" + std::to_string(device);
@@ -102,33 +104,6 @@ void Worker::set_r_policy(ReclaimPolicy r_policy) {
   }
 }
 
-void Worker::add_models(std::vector<std::string> model_names, int n_models,
-                        EngineType engine_type, std::vector<int> devices) {
-  auto progressbar = util::progressbar(n_models, name);
-  if (model_manager) {
-    req_scoreboard->expand(n_models);
-    for (int i = 0; i < n_models; i++) {
-      auto model_name = model_names[i % model_names.size()];
-      model_manager->add_model(model_name, devices);
-      progressbar.update();
-    }
-  }
-  else {
-    throw std::runtime_error("model_manager should be initialized before add_modles()\n");
-  }
-  size_t free;
-  size_t total;
-  cudaSetDevice(device.index());
-
-  c10::cuda::CUDACachingAllocator::emptyCache();
-  cudaError_t err = cudaMemGetInfo(&free, &total);
-  if (err != cudaSuccess) {
-    throw std::runtime_error("cudaMemGetInfo Error\n");
-  }
-  capacity_ = size_t(free * options_.watermark);
-  std::cout << "Available GPU memory: " << capacity_ / 1024 / 1024 / 1024 << " GB\n";
-}
-
 libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
   libtorch::Model* model = nullptr;
 
@@ -137,7 +112,7 @@ libtorch::Model* Worker::find_model(int model_id, bool* is_cold) {
   }
   else {
     bool found = false;
-    model = model_manager->get_model(model_id);
+    model = model_pool->get_model(model_id);
 
     if (r_policy_ == ReclaimPolicy::BALANCE ||
         r_policy_ == ReclaimPolicy::HYBRID) {
@@ -299,7 +274,7 @@ void Worker::preempt_models() {
           auto [vruntime, evict_model_id] = cfr->pop();
 
           auto evict_model = dynamic_cast<deepplan::Model*>(
-              model_manager->get_model(evict_model_id));
+              model_pool->get_model(evict_model_id));
           evict_model->reclaim_memory(RECLAIM_MEMORY_RATE);
 
           assert(evict_model->uncached_size <= evict_model->model_size);
@@ -330,41 +305,45 @@ void Worker::preempt_models() {
   }
 }
 
-
-void Worker::free_models() {
-  if (model_manager) {
-    clear_models();
-    delete model_manager;
-
-    model_manager = nullptr;
+void Worker::clear_models() {
+  while (running_models->size() > 0) {
+    running_models->pop()->clear();
   }
+  for (auto p_models : partial_models_list) {
+    while (p_models->size() > 0) {
+      p_models->pop()->clear();
+    }
+  }
+  while (cfr->size() > 0) {
+    auto [vruntime, model_id] = cfr->pop();
+    model_pool->get_model(model_id)->clear();
+  }
+  req_scoreboard->clear();
 }
 
-void Worker::clear_models() {
-  if (model_manager) {
-    model_manager->clear();
-    while (running_models->size() > 0) {
-      running_models->pop();
-    }
-    for (auto p_models : partial_models_list) {
-      while (p_models->size() > 0) {
-        p_models->pop();
-      }
-    }
-    while (cfr->size() > 0) {
-      cfr->pop();
-    }
-    req_scoreboard->clear();
-  }
+void Worker::sync_setup() {
+  size_t free;
+  size_t total;
+  cudaSetDevice(device.index());
+
   c10::cuda::CUDACachingAllocator::emptyCache();
+  cudaError_t err = cudaMemGetInfo(&free, &total);
+  if (err != cudaSuccess) {
+    throw std::runtime_error("cudaMemGetInfo Error\n");
+  }
+  capacity_ = size_t(free * options_.watermark);
+  std::cout << "Available GPU-" << int(device.index()) << " "
+            << "memory: " << capacity_ / 1024 / 1024 / 1024 << " GB\n";
+
+  c10::cuda::CUDACachingAllocator::emptyCache();
+
+  req_scoreboard->expand(model_pool->get_num_models());
 }
 
 void Worker::stop() {
   alive = false;
   if (worker_thr.joinable())
     worker_thr.join();
-
-  free_models();
 }
 
 void Worker::infer(std::vector<InferTask> batch_task) {

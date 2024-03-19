@@ -29,16 +29,13 @@ class Controller {
 
   std::vector<Scheduler*> schedulers;
 
+  ModelManager* model_manager;
+
   network::MessageQueue& messages_;
 
   std::thread ctrl_thr;
 
   std::vector<std::string> model_names_;
-  int n_models_ = 0;
-  int mp_size_ = 0;
-  int slo_ms_ = 0;
-  EngineType engine_type_ = EngineType::NONE;
-  ReclaimPolicy r_policy_ = ReclaimPolicy::LRU;
 
   const ServerOptions& options_;
 };
