@@ -49,7 +49,6 @@ void Controller::run() {
         infer->model_id = model_id / n_workers;
 
         auto cb = [message](serverapi::InferenceResponse* response) {
-          response->response_time = util::now();
           message.srv_session->send_response(response);
         };
 
@@ -82,8 +81,7 @@ void Controller::run() {
       scheduler->handle_timeouts();
     }
 
-    // Wait for requests to accumulate for 30ms.
-    usleep(30e3);
+    usleep(10);
   }
 }
 

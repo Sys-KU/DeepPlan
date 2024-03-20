@@ -1,5 +1,6 @@
 #pragma once
 #include <util.h>
+#include <time_util.h>
 #include <options.h>
 #include <network/session.h>
 #include <server/model_manager.h>
@@ -31,6 +32,36 @@ struct InferTask {
   bool operator<(const InferTask& other) const {
     return request->deadline < other.request->deadline;
   }
+};
+
+struct InferAction {
+  InferAction() {};
+  InferAction(
+    int action_id,
+    int model_id,
+    std::vector<InferTask> tasks,
+    std::function<void(int, uint64_t)> cb)
+    : action_id(action_id), model_id(model_id), tasks(tasks), cb(cb) {};
+
+  void complete(const uint64_t exec_time, const bool is_cold) {
+    uint64_t end_time = util::now();
+    for (const auto& task : tasks) {
+      auto response = new serverapi::InferenceResponse();
+      response->req_id = task.request->req_id;
+      response->is_cold = is_cold;
+      response->infer_time = exec_time;
+      response->arrival_time = task.request->arrival_time;
+      response->deadline = task.request->deadline;
+      response->response_time = end_time;
+      task.cb(response);
+    }
+    cb(action_id, end_time);
+  }
+
+  int action_id;
+  int model_id;
+  std::vector<InferTask> tasks;
+  std::function<void(int, uint64_t)> cb;
 };
 
 
@@ -146,7 +177,7 @@ class Worker {
 
   void run();
 
-  void infer(std::vector<InferTask> batch_task);
+  void infer(InferAction infer_action);
 
   void set_r_policy(ReclaimPolicy r_policy);
 
@@ -175,5 +206,5 @@ class Worker {
   RequestScoreboard* req_scoreboard = nullptr;
   CFR* cfr;
   std::list<util::LRUCache<int, libtorch::Model*>*> partial_models_list;
-  tbb::concurrent_queue<std::vector<InferTask>> queue_;
+  tbb::concurrent_queue<InferAction> queue_;
 };

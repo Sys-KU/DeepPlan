@@ -2,6 +2,12 @@
 #include <server/model_manager.h>
 #include <deepplan/model.h>
 
+uint64_t ModelPool::get_model_exec_time(int model_id, int batch_size) {
+  auto model = dynamic_cast<deepplan::Model*>(get_model(model_id));
+
+  return model->get_model_exec_time(batch_size);
+}
+
 void ModelPool::add_model(std::string model_name, EngineType engine_type,
                           std::vector<int> devices) {
   std::string model_path = std::string(model_repo) + "/" + model_name;

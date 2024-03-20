@@ -18,6 +18,8 @@ class ModelPool {
     return models[model_id];
   }
 
+  uint64_t get_model_exec_time(int model_id, int batch_size);
+
   void add_model(std::string model_name, EngineType engine_type,
                  std::vector<int> devices);
 

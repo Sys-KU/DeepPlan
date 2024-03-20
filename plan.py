@@ -523,7 +523,7 @@ def generate_model_config(
                     if layer.exec_type == ExecType.LTE
                     else layer.cuda_host_exec_time
                     for layer in layer_profs
-            ) 
+            )
             exec_time.exec_ns = exec_ms * 1e6
 
             prof.exec_times.append(exec_time)
@@ -539,8 +539,7 @@ def generate_model_config(
         _, layers = layer_profs_list[0]
         layer_load_times = []
         for layer in layers:
-            if layer.exec_type == ExecType.LTE:
-                layer_load_times.append(layer.load_time) 
+            layer_load_times.append(layer.load_time)
 
         prof.layer_load_times[:] = layer_load_times
 

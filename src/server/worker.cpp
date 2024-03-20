@@ -38,8 +38,9 @@ Worker::~Worker() {
 void Worker::run() {
   torch::NoGradGuard no_grad;
 
-  std::vector<InferTask> batch_task;
+  InferAction infer_action;
 
+  double infer_time = 0;
   double total_sched_time = 0;
   double total_infer_time = 0;
   int num_reqs = 0;
@@ -47,12 +48,12 @@ void Worker::run() {
   double last_logging_time = 0.f;
 
   while (alive) {
-    while (queue_.try_pop(batch_task)) {
+    while (queue_.try_pop(infer_action)) {
       auto response = new serverapi::InferenceResponse();
       bool is_cold = false;
       double t1, t2;
 
-      int model_id = batch_task[0].request->model_id;
+      int model_id = infer_action.model_id;
 
       auto model = find_model(model_id, &is_cold);
       if (model == nullptr) {
@@ -82,7 +83,7 @@ void Worker::run() {
 
       for (auto input_config : model->input_configs) {
         std::vector<at::Tensor> input_tensors;
-        for (const auto& task : batch_task) {
+        for (const auto& task : infer_action.tasks) {
           input_tensors.push_back(
               input_config.get(task.request->input, task.request->batch_size).to(device));
         }
@@ -95,18 +96,13 @@ void Worker::run() {
       torch::cuda::synchronize(device.index());
       t2 = util::now();
 
+      infer_time = t2 - t1;
+
       running_models->put(model_id, model);
 
-      for (const auto& task : batch_task) {
-        response->req_id = task.request->req_id;
-        response->is_cold = is_cold;
-        response->infer_time = t2 - t1;
-        response->arrival_time = task.request->arrival_time;
-        response->deadline = task.request->deadline;
-        task.cb(response);
-      }
+      infer_action.complete(infer_time, is_cold);
 
-      total_infer_time += ((t2 - t1) / 1e6);
+      total_infer_time += (infer_time / 1e6);
       num_reqs++;
 
       auto now = util::now() / 1e6;
@@ -375,6 +371,6 @@ void Worker::stop() {
     worker_thr.join();
 }
 
-void Worker::infer(std::vector<InferTask> batch_task) {
-  queue_.push(batch_task);
+void Worker::infer(InferAction infer_action) {
+  queue_.push(infer_action);
 }

@@ -15,11 +15,12 @@ typedef enum {
 } Device;
 
 struct LoadState {
-  LoadState(int idx, Device device, size_t size)
-    : idx(idx), device(device), size(size) {}
+  LoadState(int idx, Device device, size_t size, uint64_t load_time)
+    : idx(idx), device(device), size(size), load_time(load_time) {}
   int idx;
   Device device;
   size_t size;
+  uint64_t load_time;
 };
 
 class Model : public libtorch::Model {
@@ -44,6 +45,10 @@ class Model : public libtorch::Model {
 
   void load_layers(int n_layers, bool non_blocking = false);
 
+  uint64_t get_load_time();
+
+  uint64_t get_model_exec_time(int batch_size);
+
   // load_state_maps represent the load state whether layer is loaded or not.
   std::vector<LoadState> load_state_maps;
 
@@ -59,6 +64,8 @@ class Model : public libtorch::Model {
 
   size_t optimal_size;
   uint32_t optimal_idx;
+
+  Prof prof;
 };
 
 }

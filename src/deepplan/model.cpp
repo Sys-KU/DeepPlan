@@ -21,6 +21,24 @@ void Model::init() {
     this->model.cuda_host();
   }
 
+  Prof::EngineType proto_type;
+  if (engine_type == EngineType::PIPESWITCH) {
+    proto_type = Prof::PIPESWITCH;
+  }
+  else if (engine_type == EngineType::DEEPPLAN) {
+    proto_type = Prof::DEEPPLAN;
+  }
+
+  for (auto prof_ : this->model_config.profs()) {
+    if (proto_type == prof_.engine_type()) {
+      this->prof = prof_;
+    }
+  }
+  std::vector<double> layer_load_times;
+  for (auto load_time : prof.layer_load_times()) {
+    layer_load_times.push_back(load_time);
+  }
+
   switch (engine_type) {
     case EngineType::IN_MEMORY:
     case EngineType::ON_DEMAND:
@@ -30,18 +48,14 @@ void Model::init() {
         this->layers[i].pin_memory();
         this->layers[i].cuda_backup();
         this->load_state_maps.emplace_back(
-            i, Device::CPU, util::getModuleSize(this->layers[i]));
+            i, Device::CPU, util::getModuleSize(this->layers[i]),
+            layer_load_times[i]);
       }
 
-      for (auto prof : this->model_config.profs()) {
-        if (Prof::PIPESWITCH == prof.engine_type()) {
-            for (auto optimal_point : prof.optimal_points()) {
-                this->optimal_size = optimal_point.load_size();
-                this->optimal_idx = optimal_point.layer_idx();
-                break;
-            }
-            break;
-        }
+      for (auto optimal_point : prof.optimal_points()) {
+        this->optimal_size = optimal_point.load_size();
+        this->optimal_idx = optimal_point.layer_idx();
+        break;
       }
       break;
 
@@ -55,23 +69,18 @@ void Model::init() {
             this->layers[i].pin_memory();
             this->layers[i].cuda_backup();
             this->load_state_maps.emplace_back(
-                i, Device::CPU, util::getModuleSize(this->layers[i]));
+                i, Device::CPU, util::getModuleSize(this->layers[i]),
+                layer_load_times[i]);
           }
           break;
         }
       }
 
-      for (auto prof : this->model_config.profs()) {
-        if (Prof::DEEPPLAN == prof.engine_type()) {
-            for (auto optimal_point : prof.optimal_points()) {
-                this->optimal_size = optimal_point.load_size();
-                this->optimal_idx = optimal_point.layer_idx();
-                break;
-            }
-            break;
-        }
+      for (auto optimal_point : prof.optimal_points()) {
+        this->optimal_size = optimal_point.load_size();
+        this->optimal_idx = optimal_point.layer_idx();
+        break;
       }
-
       break;
     default:
       std::cerr << "Found incorrect EngineType\n";
@@ -210,6 +219,31 @@ void Model::load_layers(int n_layers, bool non_blocking) {
       cnt++;
     }
   }
+}
+
+uint64_t Model::get_load_time() {
+  double load_time_ms = 0.f;
+  for (auto load_state : load_state_maps) {
+    if (load_state.device == Device::CPU) {
+      load_time_ms += load_state.load_time;
+    }
+  }
+
+  uint64_t load_time_ns = static_cast<uint64_t>(load_time_ms * 1e6);
+
+  return load_time_ns;
+}
+
+uint64_t Model::get_model_exec_time(int batch_size) {
+  uint64_t exec_ns;
+  for (auto exec_time : prof.exec_times()) {
+    if (exec_time.batch_size() == batch_size) {
+      exec_ns = exec_time.exec_ns();
+      break;
+    }
+  }
+
+  return std::max(exec_ns, get_load_time());
 }
 
 }
