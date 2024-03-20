@@ -99,15 +99,18 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
 
     uint64_t t_send = util::now();
     auto onSuccess = [this, model_id, t_send](serverapi::Response* rsp) {
-      auto response = dynamic_cast<serverapi::InferenceResponse*>(rsp);
-      uint64_t deadline = response->deadline;
-      uint64_t response_time = response->response_time;
-      uint64_t arrival_time = response->arrival_time;
-      uint64_t latency = (response_time - arrival_time) / 1e6;
-      bool good = (response_time <= deadline);
-
-      this->res_results.emplace_back(model_id, latency, response->infer_time, good);
-      if (response->is_cold) this->cold_start_cnt++;
+      if (auto infer = dynamic_cast<serverapi::InferenceResponse*>(rsp)) {
+        uint64_t deadline = infer->deadline;
+        uint64_t response_time = infer->response_time;
+        uint64_t arrival_time = infer->arrival_time;
+        uint64_t latency = (response_time - arrival_time) / 1e6;
+        bool good = (response_time <= deadline);
+        this->res_results.emplace_back(model_id, latency, infer->infer_time, good);
+        if (infer->is_cold) this->cold_start_cnt++;
+      }
+      else if (auto timeout = dynamic_cast<serverapi::TimeoutResponse*>(rsp)) {
+        this->timeout_cnt++;
+      }
     };
 
     client.infer_async(inputs[model_id], model_id, onSuccess);
@@ -186,7 +189,7 @@ void ModelLoader::run() {
   for (int i = 0; i < n_models; i++) {
     auto onSuccess = [this](serverapi::Response* rsp) {};
 
-    client.infer_async(inputs[i], i, onSuccess);
+    client.infer_async(inputs[i], i, onSuccess, true);
   }
 
   client.shutdown();

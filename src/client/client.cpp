@@ -9,13 +9,15 @@ Client::Client()
     network_thr(std::bind(&Client::run, this)) {};
 
 void Client::infer_async(std::vector<char>& input, int model_id,
-                         std::function<void(serverapi::Response* rsp)> onSuccess) {
+                         std::function<void(serverapi::Response* rsp)> onSuccess,
+                         bool disable_timeout) {
   serverapi::InferenceRequest request;
 
   request.model_id = model_id;
   request.batch_size = 1;
   request.input_size = input.size();
   request.input = input.data();
+  request.disable_timeout = disable_timeout;
 
   session->send_request_async(request, onSuccess);
 }

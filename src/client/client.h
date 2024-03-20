@@ -15,7 +15,8 @@ class Client {
   void run();
 
   void infer_async(std::vector<char>& input, int model_id,
-                   std::function<void(serverapi::Response* rsp)> onSuccess);
+                   std::function<void(serverapi::Response* rsp)> onSuccess,
+                   bool disable_timeout=false);
 
   serverapi::UploadModelResponse* upload_model(
       std::vector<std::string> model_name, int n_models, EngineType engine_type,

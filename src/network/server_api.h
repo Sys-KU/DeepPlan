@@ -66,5 +66,15 @@ class msg_close_rsp_rx : public msg_protobuf_rx<RSP_CLOSE, CloseRspProto, server
   virtual void get(serverapi::CloseResponse& response);
 };
 
+class msg_timeout_rsp_tx : public msg_protobuf_tx<RSP_TIMEOUT, TimeoutRspProto, serverapi::TimeoutResponse> {
+ public:
+  virtual void set(serverapi::TimeoutResponse& response);
+};
+
+class msg_timeout_rsp_rx : public msg_protobuf_rx<RSP_TIMEOUT, TimeoutRspProto, serverapi::TimeoutResponse> {
+ public:
+  virtual void get(serverapi::TimeoutResponse& response);
+};
+
 }
 

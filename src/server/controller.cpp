@@ -53,7 +53,11 @@ void Controller::run() {
           message.srv_session->send_response(response);
         };
 
-        schedulers[worker_id]->enqueue_request(infer, cb);
+        auto timeout_cb = [message](serverapi::TimeoutResponse* response) {
+          message.srv_session->send_response(response);
+        };
+
+        schedulers[worker_id]->enqueue_request(infer, cb, timeout_cb);
       }
       else if (auto upload_model = dynamic_cast<serverapi::UploadModelRequest*>(message.req)) {
         std::vector<std::string> model_names = upload_model->model_names;
@@ -73,6 +77,9 @@ void Controller::run() {
 
     for (auto scheduler : schedulers) {
       scheduler->handle_requests();
+    }
+    for (auto scheduler : schedulers) {
+      scheduler->handle_timeouts();
     }
 
     // Wait for requests to accumulate for 30ms.

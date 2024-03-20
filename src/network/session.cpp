@@ -32,6 +32,10 @@ message_rx* SrvSession::new_rx_message(uint64_t hdr_len, uint64_t body_len,
 
     msg_rx = msg;
   }
+  else {
+    throw std::runtime_error("Received an unidentifiable message type.");
+  }
+
 
   return msg_rx;
 }
@@ -59,6 +63,9 @@ bool SrvSession::completed_receive(message_connection* conn, message_rx* req) {
     send_response(response);
 
     is_continue = false;
+  }
+  else {
+    throw std::runtime_error("Not found a castable response type.");
   }
 
   delete req;
@@ -89,6 +96,15 @@ void SrvSession::send_response(serverapi::Response* response) {
 
     close_rsp->set(*close);
     msg_tx = close_rsp;
+  }
+  else if (auto timeout = dynamic_cast<serverapi::TimeoutResponse*>(response)) {
+    auto timeout_rsp = new msg_timeout_rsp_tx();
+
+    timeout_rsp->set(*timeout);
+    msg_tx = timeout_rsp;
+  }
+  else {
+    throw std::runtime_error("Not found a castable response type.");
   }
 
   msg_tx_.send_message(*msg_tx);
@@ -131,6 +147,9 @@ std::future<serverapi::Response*> ClientSession::send_request_async(serverapi::R
     close_req->set(*close);
     msg_tx = close_req;
   }
+  else {
+    throw std::runtime_error("Not found a castable request type.");
+  }
 
   msg_tx_.send_message(*msg_tx);
 
@@ -171,6 +190,15 @@ message_rx* ClientSession::new_rx_message(uint64_t hdr_len, uint64_t body_len,
 
     msg_rx = msg;
   }
+  else if (msg_type == RSP_TIMEOUT) {
+    auto msg = new msg_timeout_rsp_rx();
+    msg->set_req_id(req_id);
+
+    msg_rx = msg;
+  }
+  else {
+    throw std::runtime_error("Received an unidentifiable message type.");
+  }
 
   return msg_rx;
 }
@@ -196,6 +224,15 @@ bool ClientSession::completed_receive(message_connection* conn, message_rx* req)
 
     is_continue = false;
     response = response_;
+  }
+  else if (auto timeout = dynamic_cast<msg_timeout_rsp_rx*>(req)) {
+    auto response_ = new serverapi::TimeoutResponse();
+    timeout->get(*response_);
+
+    response = response_;
+  }
+  else {
+    throw std::runtime_error("Not found a castable request type.");
   }
 
   requests[req_id](response);

@@ -18,12 +18,15 @@ struct InferTask {
   InferTask() {};
   InferTask(
       serverapi::InferenceRequest* request,
-      std::function<void(serverapi::InferenceResponse*)> cb)
+      std::function<void(serverapi::InferenceResponse*)> cb,
+      std::function<void(serverapi::TimeoutResponse*)> timeout_cb)
       : request(request),
-        cb(cb) {};
+        cb(cb),
+        timeout_cb(timeout_cb) {};
 
   serverapi::InferenceRequest* request;
   std::function<void(serverapi::InferenceResponse*)> cb;
+  std::function<void(serverapi::TimeoutResponse*)> timeout_cb;
 
   bool operator<(const InferTask& other) const {
     return request->deadline < other.request->deadline;

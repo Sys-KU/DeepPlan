@@ -10,12 +10,14 @@ enum MsgType {
     RSP_UPLOAD_MODEL = 102;
     RSP_LS           = 103;
     RSP_CLOSE        = 104;
+    RSP_TIMEOUT      = 105;
 }
 
 message InferenceReqProto {
     required uint32 req_id = 1;
     required uint32 model_id = 2;
     required uint32 batch_size = 3;
+    required uint32 disable_timeout = 4;
 }
 
 message InferenceRspProto {
@@ -45,5 +47,9 @@ message CloseReqProto {
 }
 
 message CloseRspProto {
+    required uint32 req_id = 1;
+}
+
+message TimeoutRspProto {
     required uint32 req_id = 1;
 }

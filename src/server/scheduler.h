@@ -14,9 +14,12 @@ class Scheduler {
 
   void enqueue_request(
       serverapi::InferenceRequest* request,
-      std::function<void(serverapi::InferenceResponse*)> cb);
+      std::function<void(serverapi::InferenceResponse*)> cb,
+      std::function<void(serverapi::TimeoutResponse*)> timeout_cb);
 
   void handle_requests();
+
+  void handle_timeouts();
 
   void clear_models();
 
@@ -36,6 +39,8 @@ class Scheduler {
   Worker* worker_;
 
   std::set<InferTask> requests_;
+
+  std::queue<InferTask> timeouts_;
 
   const ServerOptions& options_;
 };

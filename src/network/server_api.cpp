@@ -8,6 +8,7 @@ void msg_inference_req_tx::set(serverapi::InferenceRequest& request) {
   msg.set_req_id(request.req_id);
   msg.set_model_id(request.model_id);
   msg.set_batch_size(request.batch_size);
+  msg.set_disable_timeout(request.disable_timeout);
   body_len_ = request.input_size;
   body_ = request.input;
 }
@@ -17,6 +18,7 @@ void msg_inference_req_rx::get(serverapi::InferenceRequest& request) {
   request.model_id = msg.model_id();
   request.batch_size = msg.batch_size();
   request.arrival_time = util::now();
+  request.disable_timeout = msg.disable_timeout();
   request.input_size = body_len_;
   request.input = body_;
 }
@@ -83,6 +85,15 @@ void msg_close_rsp_tx::set(serverapi::CloseResponse& response) {
 }
 
 void msg_close_rsp_rx::get(serverapi::CloseResponse& response) {
+  response.req_id = get_rx_req_id();
+}
+
+void msg_timeout_rsp_tx::set(serverapi::TimeoutResponse& response) {
+  set_req_id(response.req_id);
+  msg.set_req_id(response.req_id);
+}
+
+void msg_timeout_rsp_rx::get(serverapi::TimeoutResponse& response) {
   response.req_id = get_rx_req_id();
 }
 

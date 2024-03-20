@@ -21,6 +21,7 @@ struct InferenceRequest : public Request {
   uint64_t deadline;
   uint64_t arrival_time;
   size_t input_size;
+  bool disable_timeout;
   void* input;
 };
 
@@ -49,6 +50,9 @@ struct CloseRequest : public Request {
 };
 
 struct CloseResponse : public Response {
+};
+
+struct TimeoutResponse : public Response {
 };
 
 }

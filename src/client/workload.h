@@ -56,6 +56,7 @@ class Workload {
   };
   std::vector<ResResult> res_results;
   int cold_start_cnt = 0;
+  int timeout_cnt = 0;
 };
 
 class ModelLoader {
