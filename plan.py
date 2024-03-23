@@ -538,10 +538,13 @@ def generate_model_config(
 
         _, layers = layer_profs_list[0]
         layer_load_times = []
+        layer_sizes = []
         for layer in layers:
-            layer_load_times.append(layer.load_time)
+            layer_load_times.append(layer.load_time * 1e6)
+            layer_sizes.append(layer.size)
 
         prof.layer_load_times[:] = layer_load_times
+        prof.layer_sizes[:] = layer_sizes
 
         model_config.profs.append(prof)
 

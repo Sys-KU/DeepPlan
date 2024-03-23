@@ -5,6 +5,13 @@
 
 size_t getDeviceActiveMemorySize(int deivce);
 
+struct ReclaimingOutput {
+  int model_id;
+  size_t size;
+  std::vector<int> layers;
+};
+
+
 class ModelPool {
  public:
   ModelPool(std::string model_repo)
@@ -14,8 +21,14 @@ class ModelPool {
     return models.size();
   }
 
-  libtorch::Model* get_model(int model_id) {
+  deepplan::Model* get_model(int model_id) {
     return models[model_id];
+  }
+
+  ReclaimingOutput reclaim_model(int model_id, size_t size=SIZE_MAX) {
+    auto [reclaimed_size, r_layers] = models[model_id]->reclaim_memory(size);
+    ReclaimingOutput output = {model_id, reclaimed_size, r_layers};
+    return output;
   }
 
   uint64_t get_model_exec_time(int model_id, int batch_size);
@@ -24,15 +37,15 @@ class ModelPool {
                  std::vector<int> devices);
 
   void reset_models() {
-    for (auto model : models) {
-      delete model;
+    while (!models.empty()) {
+      delete models.back();
+      models.pop_back();
     }
   }
 
   std::string model_repo;
 
- private:
-  std::vector<libtorch::Model*> models;
+  std::vector<deepplan::Model*> models;
 };
 
 class ModelManager {

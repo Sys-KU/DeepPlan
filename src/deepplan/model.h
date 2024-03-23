@@ -23,9 +23,45 @@ struct LoadState {
   uint64_t load_time;
 };
 
+class ModelInstance {
+ public:
+   ModelInstance(const std::string script_path,
+                 const std::vector<InputConfig> input_configs,
+                 const at::Device device,
+                 const std::vector<int> load_layers);
+
+  void init(const std::string script_path, const std::vector<int> load_layers);
+
+  torch::jit::IValue forward(ScriptModuleInput& x,
+                             const std::vector<int> load_layer_idxs);
+
+  void reclaim_layers(std::vector<int> reclaiming_layers);
+
+  void load_layers(std::vector<int> load_layers, bool non_blocking);
+
+  void clear() {
+    model.clear();
+  }
+
+ private:
+  at::Device target_device;
+
+  ScriptModule model;
+
+  std::vector<ScriptModule> layers;
+
+  std::vector<InputConfig> input_configs;
+};
+
+
 class Model : public libtorch::Model {
  public:
   Model(const std::string name, const std::string model_path, const EngineType type, const std::vector<int> devices);
+  ~Model() {
+    if (model_instance != nullptr) {
+      delete model_instance;
+    }
+  };
 
   void init();
 
@@ -35,19 +71,30 @@ class Model : public libtorch::Model {
 
   void clear();
 
-  void reclaim_layers(int n_layers);
-
-  void reclaim_memory(size_t size);
+  std::pair<size_t, std::vector<int>> reclaim_memory(size_t size);
 
   void reclaim_memory(double rate);
 
-  void load_layers(bool non_blocking = false);
+  std::pair<size_t, std::vector<int>> load_layers(bool non_blocking = false);
 
-  void load_layers(int n_layers, bool non_blocking = false);
+  std::pair<size_t, std::vector<int>> load_layers(int n_layers, bool non_blocking = false);
 
   uint64_t get_load_time();
 
   uint64_t get_model_exec_time(int batch_size);
+
+  std::vector<int> get_load_layers() {
+    std::vector<int> load_layers;
+    for (auto& load_state : load_state_maps) {
+      if (load_state.device == Device::CPU) {
+        load_layers.push_back(load_state.idx);
+      }
+    }
+
+    return std::move(load_layers);
+  }
+
+  ModelInstance* model_instance;
 
   // load_state_maps represent the load state whether layer is loaded or not.
   std::vector<LoadState> load_state_maps;

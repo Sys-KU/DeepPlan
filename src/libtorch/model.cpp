@@ -16,8 +16,6 @@ Model::Model(const std::string name, const std::string model_path, const int dev
 
 void Model::init(const std::string model_path) {
   std::string script_name;
-  std::string script_path;
-  std::string config_path;
 
   if (!util::exists_dir(model_path.c_str())) {
     std::stringstream msg;
@@ -36,7 +34,6 @@ void Model::init(const std::string model_path) {
   config_path = model_path + "/config.pbtxt";
 
   try {
-    this->model = torch::jit::load(script_path);
     if (!util::read_from_pbtxt(this->model_config, config_path)) {
       std::stringstream msg;
       msg << "Failed to read " << config_path;
@@ -46,25 +43,10 @@ void Model::init(const std::string model_path) {
       this->input_configs.emplace_back(io);
     }
   }
-  catch (const c10::Error& e) {
-    std::cerr << "Error loading the model\n";
-    throw e;
-  }
   catch (const std::exception& e) {
     std::cerr << e.what() << "\n";
     throw e;
   }
-
-  this->layers = util::travel_layers(this->model);
-  this->n_layers = this->layers.size();
-  this->model.eval();
-  for (auto& layer : this->layers)
-    layer.to(at::kCPU);
-
-  this->model_size = util::getModuleSize(this->model, true);
-
-  model.cuda_backup();
-  this->is_cuda = false;
 }
 
 torch::jit::IValue Model::forward(ScriptModuleInput& x) {
@@ -73,18 +55,11 @@ torch::jit::IValue Model::forward(ScriptModuleInput& x) {
 
 void Model::to(at::Device device, bool non_blocking) {
   model.to(device, non_blocking);
-  if (device.is_cuda())
-    is_cuda = true;
-  else
-    is_cuda = false;
 }
 
 void Model::clear()
 {
-  if (this->is_cuda) {
-    model.clear();
-    is_cuda = false;
-  }
+  model.clear();
 }
 
 }

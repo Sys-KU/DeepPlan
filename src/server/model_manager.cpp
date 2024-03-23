@@ -11,9 +11,8 @@ uint64_t ModelPool::get_model_exec_time(int model_id, int batch_size) {
 void ModelPool::add_model(std::string model_name, EngineType engine_type,
                           std::vector<int> devices) {
   std::string model_path = std::string(model_repo) + "/" + model_name;
-  libtorch::Model *model;
 
-  model = new deepplan::Model(model_name, model_path, engine_type, devices);
+  auto model = new deepplan::Model(model_name, model_path, engine_type, devices);
 
   models.push_back(std::move(model));
 }

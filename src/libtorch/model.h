@@ -26,13 +26,12 @@ class Model {
 
   size_t model_size;
 
-  std::vector<ScriptModule> layers;
-
   int n_layers;
 
-  std::atomic<bool> is_cuda;
-
   std::vector<InputConfig> input_configs;
+
+  std::string script_path;
+  std::string config_path;
 
   ModelConfig model_config;
 };

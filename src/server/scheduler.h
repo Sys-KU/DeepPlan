@@ -8,6 +8,111 @@
 #include <set>
 #include <mutex>
 
+
+class RequestScoreboard {
+ public:
+  RequestScoreboard(int num_models, int window_size)
+   : scores(num_models, 0),
+     window_size_(window_size) {}
+
+  RequestScoreboard(int window_size)
+   : window_size_(window_size) {}
+
+  void update_window(int model_id) {
+    req_window.push(model_id);
+
+    scores[model_id]++;
+
+    if (req_window.size() > window_size_) {
+      scores[req_window.front()]--;
+      req_window.pop();
+    }
+  }
+
+  int get(int model_id) {
+    return scores[model_id];
+  }
+
+  void clear() {
+    while (!req_window.empty()) {
+      req_window.pop();
+    }
+    std::fill(scores.begin(), scores.end(), 0);
+  }
+
+  void expand(int num_models) {
+    scores.resize(scores.size() + num_models);
+    std::fill(scores.begin(), scores.end(), 0);
+  }
+
+ private:
+  std::queue<int> req_window;
+
+  std::vector<int> scores;
+
+  int window_size_;
+};
+
+
+class CFR {
+ public:
+  bool put(int model_id, int vruntime) {
+    if(exist(model_id)) {
+      return false;
+    }
+
+    auto item = std::make_pair(vruntime, model_id);
+
+    auto iter = items.begin();
+    for (iter; iter != items.end(); iter++) {
+      if (iter->first > item.first) {
+        auto pos =items.insert(iter, item);
+        index.emplace(model_id, pos);
+        break;
+      }
+    }
+
+    if (iter == items.end()) {
+      auto pos = items.insert(iter, item);
+      index.emplace(model_id, pos);
+    }
+
+
+    return true;
+  }
+
+  bool exist(int model_id) {
+    return (index.count(model_id)>0);
+  }
+
+  std::pair<int, int> pop() {
+    auto item = items.front();
+    index.erase(item.second);
+    items.pop_front();
+    return item;
+  }
+
+  void erase(int model_id) {
+    assert(exist(model_id));
+    auto itr = index.find(model_id);
+
+    index.erase(itr);
+    items.erase(itr->second);
+  }
+
+  size_t size() {
+    return index.size();
+  }
+
+ private:
+  // pair = {vruntime, model_id}
+  std::list<std::pair<int, int>> items;
+
+  // key = model_id, valud = iterator of items
+  std::unordered_map<int, typename std::list<std::pair<int, int>>::iterator> index;
+};
+
+
 // Reference https://gitlab.mpi-sws.org/cld/ml/clockwork/
 class WorkerTracker {
  private:
@@ -36,7 +141,7 @@ class WorkerTracker {
       for (it; it != outstandings.end(); it++) {
         if (it->id == id) {
           total_outstanding_time -= it->exec_time;
-          work_begin += end_time;
+          work_begin += it->exec_time;
           outstandings.erase(it);
         }
       }
@@ -48,6 +153,56 @@ class WorkerTracker {
       work_begin = std::max(work_begin, util::now());
     }
     outstandings.push_back({id, exec_time});
+    total_outstanding_time += exec_time;
+  }
+};
+
+
+class MemoryTracker {
+  struct Memory { int id; int64_t size; };
+  std::deque<Memory> mem_requests;
+
+  int64_t total_mem_req_size = 0UL;
+  int64_t mem_begin = 0UL;
+
+ public:
+  MemoryTracker() {};
+
+  uint64_t get_mem() {
+    return mem_begin + total_mem_req_size;
+  }
+
+  void update(int id, uint64_t end_mem) {
+    if (mem_requests.front().id == id) {
+      auto request = mem_requests.front();
+      total_mem_req_size -= request.size;
+      mem_begin = end_mem;
+      mem_requests.pop_front();
+    }
+    else {
+      auto it = mem_requests.begin();
+      for (it; it != mem_requests.end(); it++) {
+        if (it->id == id) {
+          total_mem_req_size -= it->size;
+          mem_begin += it->size;
+          mem_requests.erase(it);
+        }
+      }
+    }
+  }
+
+  void load_mem(int id, uint64_t size) {
+    total_mem_req_size += size;
+    mem_requests.push_back({id, static_cast<int64_t>(size)});
+  }
+
+  void reclaim_mem(int id, uint64_t size) {
+    total_mem_req_size -= size;
+    mem_requests.push_back({id, static_cast<int64_t>(-size)});
+  }
+
+  void clear() {
+    mem_begin = 0UL;
   }
 };
 
@@ -65,6 +220,10 @@ class Scheduler {
   void handle_requests();
 
   void handle_timeouts();
+
+  deepplan::Model* find_model(int model_id, bool* is_cold);
+
+  ReclaimingOutput preempt_models();
 
   void clear_models();
 
@@ -85,7 +244,11 @@ class Scheduler {
 
   WorkerTracker exec;
 
+  MemoryTracker mem;
+
   std::mutex exec_mutex;
+
+  std::mutex mem_mutex;
 
   std::set<InferTask> requests_;
 
@@ -98,4 +261,12 @@ class Scheduler {
   // How far ahead, in nanoseconds, should the scheduler schedule.
   // Default is 10ms.
   uint64_t schedule_ahead = 1e7;
+
+  size_t capacity_;
+
+  ReclaimPolicy r_policy_;
+  util::LRUCache<int, deepplan::Model*>* running_models;
+  RequestScoreboard* req_scoreboard = nullptr;
+  CFR* cfr;
+  std::list<util::LRUCache<int, deepplan::Model*>*> partial_models_list;
 };

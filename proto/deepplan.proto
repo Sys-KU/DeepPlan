@@ -44,6 +44,7 @@ message Prof {
     repeated ExecTime exec_times = 2;
     repeated OptimalPoint optimal_points = 3;
     repeated double layer_load_times = 4;
+    repeated uint32 layer_sizes = 5;
 }
 
 message ModelConfig {

@@ -8,6 +8,71 @@
 
 namespace deepplan {
 
+ModelInstance::ModelInstance(const std::string script_path,
+                             const std::vector<InputConfig> input_configs,
+                             const at::Device device,
+                             const std::vector<int> load_layers)
+  : input_configs(input_configs),
+    target_device(device) {
+    init(script_path, load_layers);
+  }
+
+void ModelInstance::init(const std::string script_path,
+                         const std::vector<int> load_layers) {
+  try {
+    this->model = torch::jit::load(script_path);
+  }
+  catch (const c10::Error& e) {
+    std::cerr << "Error loading the model\n";
+  }
+
+  this->layers = util::travel_layers(this->model);
+  this->model.eval();
+
+  {
+    c10::cuda::CUDAGuard device_guard(this->target_device);
+    this->model.to(at::kCPU);
+    this->model.cuda_host();
+  }
+
+
+  for (auto i : load_layers) {
+    this->layers[i].to(at::kCPU);
+    this->layers[i].pin_memory();
+    this->layers[i].cuda_backup();
+
+  }
+
+  this->model.cuda_backup();
+}
+
+torch::jit::IValue ModelInstance::forward(
+    ScriptModuleInput& x, const std::vector<int> load_layer_idxs) {
+  std::unordered_map<int, std::vector<ScriptModule>> device_map;
+  std::vector<ScriptModule> load_layers;
+
+  // TODO(jinu): Supprot the multi-device mapping
+  for (auto i : load_layer_idxs) {
+    load_layers.push_back(this->layers[i]);
+  }
+  device_map[target_device.index()] = load_layers;
+
+  auto outputs = RunEngine(model, x, target_device, device_map);
+  return outputs;
+}
+
+void ModelInstance::reclaim_layers(std::vector<int> reclaiming_layers) {
+  for (int i : reclaiming_layers) {
+    layers[i].clear();
+  }
+}
+
+void ModelInstance::load_layers(std::vector<int> load_layers, bool non_blocking) {
+  for (int i : load_layers) {
+    layers[i].to(target_device, non_blocking);
+  }
+}
+
 Model::Model(const std::string name, const std::string model_path, const EngineType type, const std::vector<int> devices)
   : engine_type(type),
     libtorch::Model(name, model_path, devices[0]) {
@@ -15,12 +80,6 @@ Model::Model(const std::string name, const std::string model_path, const EngineT
     }
 
 void Model::init() {
-  {
-    c10::cuda::CUDAGuard device_guard(this->target_device);
-    this->model.to(at::kCPU);
-    this->model.cuda_host();
-  }
-
   Prof::EngineType proto_type;
   if (engine_type == EngineType::PIPESWITCH) {
     proto_type = Prof::PIPESWITCH;
@@ -38,18 +97,22 @@ void Model::init() {
   for (auto load_time : prof.layer_load_times()) {
     layer_load_times.push_back(load_time);
   }
+  std::vector<double> layer_sizes;
+  for (auto layer_size : prof.layer_sizes()) {
+    layer_sizes.push_back(layer_size);
+  }
 
+  this->n_layers = layer_sizes.size();
+
+  std::vector<int> load_layers;
   switch (engine_type) {
     case EngineType::IN_MEMORY:
     case EngineType::ON_DEMAND:
     case EngineType::PIPESWITCH:
       for (int i = 0; i < this->n_layers; i++) {
-        this->layers[i].to(at::kCPU);
-        this->layers[i].pin_memory();
-        this->layers[i].cuda_backup();
+        load_layers.push_back(i);
         this->load_state_maps.emplace_back(
-            i, Device::CPU, util::getModuleSize(this->layers[i]),
-            layer_load_times[i]);
+            i, Device::CPU, layer_sizes[i], layer_load_times[i]);
       }
 
       for (auto optimal_point : prof.optimal_points()) {
@@ -65,12 +128,9 @@ void Model::init() {
         if (Plan::DYNAMIC == plan.plan_type()) {
           auto ll = plan.load_layers();
           for (auto i : ll) {
-            this->layers[i].to(at::kCPU);
-            this->layers[i].pin_memory();
-            this->layers[i].cuda_backup();
+            load_layers.push_back(i);
             this->load_state_maps.emplace_back(
-                i, Device::CPU, util::getModuleSize(this->layers[i]),
-                layer_load_times[i]);
+                i, Device::CPU, layer_sizes[i], layer_load_times[i]);
           }
           break;
         }
@@ -88,7 +148,7 @@ void Model::init() {
   }
 
   // Set device_map
-  this->model_size = util::getModuleSize(this->model, true);
+  this->model_size = std::accumulate(layer_sizes.begin(), layer_sizes.end(), 0);
   {
     int n_device = devices.size();
     size_t block_size = model_size / n_device;
@@ -121,17 +181,19 @@ void Model::init() {
     }
   }
 
-  // TODO
-  // If using parallel transfer, the devices other than the target device
-  // convert cuda_host to pin_memory
-
   uncached_size = model_size;
-  model.cuda_backup();
-  this->is_cuda = false;
+
+  model_instance = new ModelInstance(script_path, input_configs, target_device, load_layers);
 }
 
 torch::jit::IValue Model::forward(ScriptModuleInput& x) {
-  auto outputs = RunEngine(this, x);
+  std::vector<int> load_layers;
+  for (auto load_state : load_state_maps) {
+    if (load_state.device == Device::CPU) {
+      load_layers.push_back(load_state.idx);
+    }
+  }
+  auto outputs = model_instance->forward(x, load_layers);
   return outputs;
 }
 
@@ -143,51 +205,33 @@ void Model::to(at::Device device, bool non_blocking) {
     iter.device = dest_device;
   }
 
-  if (device.is_cuda())
-    is_cuda = true;
-  else
-    is_cuda = false;
 }
 
 void Model::clear()
 {
-  if (this->is_cuda) {
-    model.clear();
-    for (auto& load_state : load_state_maps) {
-      if (load_state.device == Device::CUDA) {
-        load_state.device = Device::CPU;
-      }
-    }
-    is_cuda = false;
-    uncached_size = model_size;
-  }
-}
-
-void Model::reclaim_layers(int n_layers) {
   size_t reclaimed_size = 0;
-  int cnt = 0;
-
+  std::vector<int> reclaiming_layers;
   for (auto& load_state : load_state_maps) {
     if (load_state.device == Device::CUDA) {
-      layers[load_state.idx].clear();
+      reclaiming_layers.push_back(load_state.idx);
       load_state.device = Device::CPU;
       reclaimed_size += load_state.size;
-      cnt++;
     }
-    if (n_layers <= cnt) break;
   }
+  uncached_size = model_size;
 
-  uncached_size += reclaimed_size;
+  model_instance->clear();
 }
 
-void Model::reclaim_memory(size_t size) {
+std::pair<size_t, std::vector<int>> Model::reclaim_memory(size_t size) {
   size_t reclaimed_size = 0;
 
   // Reclaim memory in the reverse order of layerslayers backward.
+  std::vector<int> reclaiming_layers;
   for (auto iter = load_state_maps.rbegin(); iter != load_state_maps.rend(); iter++) {
     auto&& load_state = (*iter);
     if (load_state.device == Device::CUDA) {
-      layers[load_state.idx].clear();
+      reclaiming_layers.push_back(load_state.idx);
       load_state.device = Device::CPU;
       reclaimed_size += load_state.size;
       if (reclaimed_size > size) {
@@ -197,28 +241,36 @@ void Model::reclaim_memory(size_t size) {
   }
 
   uncached_size += reclaimed_size;
+
+  return std::make_pair(reclaimed_size, reclaiming_layers);
 }
 
 void Model::reclaim_memory(double rate) {
   reclaim_memory((size_t)(model_size * rate));
 }
 
-void Model::load_layers(bool non_blocking) {
-  load_layers(load_state_maps.size(), non_blocking);
+std::pair<size_t, std::vector<int>> Model::load_layers(bool non_blocking) {
+  return load_layers(load_state_maps.size(), non_blocking);
 }
 
-void Model::load_layers(int n_layers, bool non_blocking) {
+std::pair<size_t, std::vector<int>> Model::load_layers(int n_layers, bool non_blocking) {
   int cnt = 0;
+  size_t loaded_size = 0;
 
+  std::vector<int> load_layers;
   for (auto& load_state : load_state_maps) {
     if (n_layers <= cnt) break;
     if (load_state.device == Device::CPU) {
-      layers[load_state.idx].to(target_device, non_blocking);
+      load_layers.push_back(load_state.idx);
       load_state.device = Device::CUDA;
-      uncached_size -= load_state.size;
+      loaded_size += load_state.size;
       cnt++;
     }
   }
+
+  uncached_size -= loaded_size;
+
+  return std::make_pair(loaded_size, load_layers);
 }
 
 uint64_t Model::get_load_time() {
@@ -229,7 +281,7 @@ uint64_t Model::get_load_time() {
     }
   }
 
-  uint64_t load_time_ns = static_cast<uint64_t>(load_time_ms * 1e6);
+  uint64_t load_time_ns = static_cast<uint64_t>(load_time_ms);
 
   return load_time_ns;
 }

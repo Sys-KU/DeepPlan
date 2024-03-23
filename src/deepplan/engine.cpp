@@ -169,47 +169,41 @@ class PipelineEngine : public Engine {
   PipelineEngine()
     : Engine() {};
 
-  torch::jit::IValue run(Model* model, ScriptModuleInput& x) {
-    int target_device = model->target_device.index();
+  torch::jit::IValue run(
+      ScriptModule& model,
+      ScriptModuleInput& x,
+      int target_device,
+      std::unordered_map<int, std::vector<ScriptModule>>& device_map) {
     torch::jit::IValue outputs;
 
     assert(n_device > target_device);
 
-    LoadLayers(model);
+    for (auto [device, modules] : device_map) {
+      g_pcie_thrs[device]->transfer_modules(modules, device);
+    }
 
     {
       at::cuda::CUDAStreamGuard stream_guard(g_exec_streams[target_device]);
-      outputs = model->model.forward(x);
+      outputs = model.forward(x);
     }
 
     return outputs;
   }
+
 };
 
 static PipelineEngine engine;
 
-torch::jit::IValue RunEngine(Model* model, ScriptModuleInput& x) {
-  c10::cuda::CUDAGuard device_guard(model->target_device);
-  auto outputs = engine.run(model, x);
+torch::jit::IValue RunEngine(
+    ScriptModule& model,
+    ScriptModuleInput& x,
+    at::Device target_device,
+    std::unordered_map<int, std::vector<ScriptModule>>& device_map) {
+  c10::cuda::CUDAGuard device_guard(target_device);
+  auto outputs = engine.run(model, x, target_device.index(), device_map);
 
   return outputs;
 }
 
-void LoadLayers(Model* model) {
-  int target_device = model->target_device.index();
-
-  std::vector<ScriptModule> modules;
-  for (auto& load_state : model->load_state_maps) {
-    if (load_state.device == Device::CPU) {
-      modules.push_back(model->layers[load_state.idx]);
-      load_state.device = Device::CUDA;
-    }
-  }
-  if (!modules.empty()) {
-    model->uncached_size = 0;
-    model->is_cuda = true;
-    g_pcie_thrs[target_device]->transfer_modules(modules, target_device);
-  }
-}
 
 }
