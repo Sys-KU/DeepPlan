@@ -6,7 +6,7 @@
 
 Scheduler::Scheduler(int device, const ServerOptions& options,
                      ModelPool* model_pool, std::string scheduler_name)
-  : worker_(new Worker(device, options, model_pool)),
+  : worker_(new Worker(device, options)),
     model_pool(model_pool),
     device(at::kCUDA, device),
     name(scheduler_name),
@@ -41,10 +41,8 @@ void Scheduler::handle_requests() {
   while (!requests_.empty()) {
     uint64_t exec_at;
     uint64_t now = util::now();
-    {
-      std::lock_guard<std::mutex> guard(exec_mutex);
-      exec_at = exec.available();
-    }
+
+    exec_at = exec.available();
 
     uint64_t schedule_until = now + schedule_ahead;
     if (exec_at >= schedule_until) {
@@ -93,55 +91,44 @@ void Scheduler::handle_requests() {
 
       size_t uncached_size = model->uncached_size;
       uint64_t mem_size = mem.get_mem();
-      while ((mem_size + uncached_size)
+      uint64_t reclaimed_size = 0;
+      std::vector<ReclaimingOutput> outputs;
+      while ((mem_size + uncached_size - reclaimed_size)
              >= capacity_) {
         auto output = preempt_models();
 
-        mem_size -= output.size;
+        reclaimed_size += output.size;
 
-        auto r_cb = [&mem = mem, &mem_mutex = mem_mutex](int action_id, uint64_t end_size) {
-          std::lock_guard<std::mutex> guard(mem_mutex);
+        outputs.push_back(std::move(output));
+      }
+
+      if (!outputs.empty()) {
+        auto r_cb = [&mem = mem](int action_id, uint64_t end_size) {
           mem.update(action_id, end_size);
         };
 
-        // TODO(jinu): Merge requests into a single action.
-        ReclaimAction action(action_seed_id, output.model_id, output.layers, r_cb);
-        {
-          std::lock_guard<std::mutex> guard(mem_mutex);
-          mem.reclaim_mem(action_seed_id, output.size);
-        }
-        action_seed_id++;
+        mem.reclaim_mem(action_seed_id, reclaimed_size);
 
+        ReclaimAction action(action_seed_id, outputs, r_cb);
         worker_->reclaim(action);
+
+        action_seed_id++;
       }
 
       running_models->put(model_id, model);
 
       auto [loaded_size, load_layers] = model->load_layers();
-      {
-        std::lock_guard<std::mutex> guard(mem_mutex);
-        mem.load_mem(action_seed_id, loaded_size);
-      }
+      mem.load_mem(action_seed_id, loaded_size);
 
-      // TODO(jinu): Move the mutex into the tracker.
-      auto i_cb = [&exec = exec, &exec_mutex = exec_mutex, &mem = mem, &mem_mutex = mem_mutex](int action_id, uint64_t end_time, uint64_t end_size) {
-        {
-          std::lock_guard<std::mutex> guard(exec_mutex);
-          exec.update(action_id, end_time);
-        }
-        {
-          std::lock_guard<std::mutex> guard(mem_mutex);
-          mem.update(action_id, end_size);
-        }
+      auto i_cb = [&exec = exec, &mem = mem](int action_id, uint64_t end_time, uint64_t end_size) {
+        exec.update(action_id, end_time);
+        mem.update(action_id, end_size);
       };
 
       InferAction action(action_seed_id, model_id, load_layers, tasks, i_cb);
 
       uint64_t estimated_time = model_pool->get_model_exec_time(model_id, batch_size);
-      {
-        std::lock_guard<std::mutex> guard(exec_mutex);
-        exec.add_work(action_seed_id, estimated_time);
-      }
+      exec.add_work(action_seed_id, estimated_time);
 
       action_seed_id++;
       worker_->infer(action);

@@ -36,13 +36,12 @@ struct InferTask {
 
 struct Action {
   Action() {};
-  Action(int action_id, int model_id)
-    : action_id(action_id), model_id(model_id) {};
+  Action(int action_id)
+    : action_id(action_id) {};
 
   virtual ~Action() {};
 
   int action_id;
-  int model_id;
 };
 
 struct InferAction : public Action {
@@ -53,7 +52,7 @@ struct InferAction : public Action {
     std::vector<int> layers,
     std::vector<InferTask> tasks,
     std::function<void(int, uint64_t, uint64_t)> cb)
-    : Action(action_id, model_id), layers(layers), tasks(tasks), cb(cb) {};
+    : Action(action_id), model_id(model_id), layers(layers), tasks(tasks), cb(cb) {};
 
   void complete(const uint64_t exec_time, const uint64_t end_size, const bool is_cold) {
     uint64_t end_time = util::now();
@@ -70,6 +69,7 @@ struct InferAction : public Action {
     cb(action_id, end_time, end_size);
   }
 
+  int model_id;
   std::vector<int> layers;
   std::vector<InferTask> tasks;
   std::function<void(int, uint64_t, uint64_t)> cb;
@@ -80,16 +80,15 @@ struct ReclaimAction : public Action {
   ReclaimAction() {};
   ReclaimAction(
     int action_id,
-    int model_id,
-    std::vector<int> layers,
+    std::vector<ReclaimingOutput> outputs,
     std::function<void(int, uint64_t)> cb)
-    : Action(action_id, model_id), layers(layers), cb(cb) {};
+    : Action(action_id), outputs(outputs), cb(cb) {};
 
   void complete(const uint64_t end_size) {
     cb(action_id, end_size);
   }
 
-  std::vector<int> layers;
+  std::vector<ReclaimingOutput> outputs;
   std::function<void(int, uint64_t)> cb;
 };
 
@@ -99,7 +98,7 @@ using namespace deepplan;
 class Worker {
  public:
   Worker(int device, const ServerOptions& options,
-         ModelPool* model_pool, std::string name="");
+         std::string name="");
   ~Worker();
 
   void run();
@@ -123,6 +122,5 @@ class Worker {
   std::atomic_bool alive;
   std::thread worker_thr;
   std::vector<ModelInstance*> model_instances;
-  ModelPool* model_pool;
   tbb::concurrent_queue<std::shared_ptr<Action>> queue_;
 };

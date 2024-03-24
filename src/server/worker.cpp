@@ -9,11 +9,10 @@
 #include <c10/cuda/CUDACachingAllocator.h>
 
 Worker::Worker(int device, const ServerOptions& options,
-               ModelPool* model_pool, std::string worker_name)
+               std::string worker_name)
   : device(at::kCUDA, device),
     name(worker_name),
     options_(options),
-    model_pool(model_pool),
     alive(true) {
       if (name.empty()) {
         name = "Worker" + std::to_string(device);
@@ -41,14 +40,15 @@ void Worker::run() {
       bool is_cold = false;
       double t1, t2;
 
-      int model_id = action->model_id;
-
-      auto model = model_pool->get_model(model_id);
-
       if (auto infer_action = std::dynamic_pointer_cast<InferAction>(action)) {
+        int model_id = infer_action->model_id;
+
+        auto model_instance = model_instances[model_id];
+
         ScriptModuleInput inputs;
 
-        for (auto input_config : model->input_configs) {
+        // FIXME(jinu)
+        for (auto input_config : model_instance->input_configs) {
           std::vector<at::Tensor> input_tensors;
           for (const auto& task : infer_action->tasks) {
             input_tensors.push_back(
@@ -63,7 +63,7 @@ void Worker::run() {
         num_colds += is_cold;
 
         t1 = util::now();
-        model->model_instance->forward(inputs, infer_action->layers);
+        model_instance->forward(inputs, infer_action->layers);
 
         torch::cuda::synchronize(device.index());
         t2 = util::now();
@@ -90,7 +90,10 @@ void Worker::run() {
         }
       }
       else if (auto reclaim_action = std::dynamic_pointer_cast<ReclaimAction>(action)) {
-        model->model_instance->reclaim_layers(reclaim_action->layers);
+        auto outputs = reclaim_action->outputs;
+        for (auto output : outputs) {
+          model_instances[output.model_id]->reclaim_layers(output.layers);
+        }
         auto end_size = getDeviceActiveMemorySize(device.index());
         reclaim_action->complete(end_size);
       }
@@ -99,7 +102,7 @@ void Worker::run() {
 }
 
 void Worker::sync_setup(std::vector<ModelInstance*> model_instances) {
-  model_instances = model_instances;
+  this->model_instances = model_instances;
 }
 
 void Worker::stop() {

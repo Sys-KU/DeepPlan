@@ -43,14 +43,14 @@ class ModelInstance {
     model.clear();
   }
 
+  std::vector<InputConfig> input_configs;
+
  private:
   at::Device target_device;
 
   ScriptModule model;
 
   std::vector<ScriptModule> layers;
-
-  std::vector<InputConfig> input_configs;
 };
 
 

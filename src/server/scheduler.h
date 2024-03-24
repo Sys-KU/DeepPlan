@@ -121,15 +121,18 @@ class WorkerTracker {
 
   uint64_t total_outstanding_time = 0UL;
   uint64_t work_begin = 0UL;
+  std::mutex exec_mutex;
 
  public:
   WorkerTracker() {};
 
   uint64_t available() {
+    std::lock_guard<std::mutex> guard(exec_mutex);
     return std::max(work_begin + total_outstanding_time, util::now());
   }
 
   void update(int id, uint64_t end_time) {
+    std::lock_guard<std::mutex> guard(exec_mutex);
     if (outstandings.front().id == id) {
       auto work = outstandings.front();
       total_outstanding_time -= work.exec_time;
@@ -149,6 +152,7 @@ class WorkerTracker {
   }
 
   void add_work(int id, uint64_t exec_time) {
+    std::lock_guard<std::mutex> guard(exec_mutex);
     if (outstandings.empty()) {
       work_begin = std::max(work_begin, util::now());
     }
@@ -164,15 +168,18 @@ class MemoryTracker {
 
   int64_t total_mem_req_size = 0UL;
   int64_t mem_begin = 0UL;
+  std::mutex mem_mutex;
 
  public:
   MemoryTracker() {};
 
   uint64_t get_mem() {
+    std::lock_guard guard(mem_mutex);
     return mem_begin + total_mem_req_size;
   }
 
   void update(int id, uint64_t end_mem) {
+    std::lock_guard guard(mem_mutex);
     if (mem_requests.front().id == id) {
       auto request = mem_requests.front();
       total_mem_req_size -= request.size;
@@ -192,16 +199,19 @@ class MemoryTracker {
   }
 
   void load_mem(int id, uint64_t size) {
+    std::lock_guard guard(mem_mutex);
     total_mem_req_size += size;
     mem_requests.push_back({id, static_cast<int64_t>(size)});
   }
 
   void reclaim_mem(int id, uint64_t size) {
+    std::lock_guard guard(mem_mutex);
     total_mem_req_size -= size;
     mem_requests.push_back({id, static_cast<int64_t>(-size)});
   }
 
   void clear() {
+    std::lock_guard guard(mem_mutex);
     mem_begin = 0UL;
   }
 };
@@ -245,10 +255,6 @@ class Scheduler {
   WorkerTracker exec;
 
   MemoryTracker mem;
-
-  std::mutex exec_mutex;
-
-  std::mutex mem_mutex;
 
   std::set<InferTask> requests_;
 
