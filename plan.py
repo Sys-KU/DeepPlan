@@ -72,6 +72,11 @@ class MeasureRecorder():
         event1 = torch.cuda.Event(enable_timing=True)
         event2 = torch.cuda.Event(enable_timing=True)
 
+        # Delay the kenrel execution to avoid including launch overhead.
+        # It allows us to measure time accurately.
+        with torch.cuda.stream(stream):
+            torch.cuda._sleep(1000000)
+
         event_tuple = (event1, event2)
         self.events[key] = (event_tuple)
         event1.record(stream)
@@ -218,15 +223,15 @@ def dump_profile_info(model, x, file_name):
         size = 0
         for key, param in layer._parameters.items():
             if param is not None:
-                size += np.prod(np.array(param.size())) * 4
+                size += np.prod(np.array(param.size()), dtype=np.int64) * 4
         for key, buf in layer._buffers.items():
             if buf is not None:
-                size += np.prod(np.array(buf.size())) * 4
+                size += np.prod(np.array(buf.size()), dtype=np.int64) * 4
 
         layer_prof = LayerProf(index = i,
                                layer_type = layer.__class__.__name__,
                                size = size,
-                               load_time = layer_load_times[i],
+                               load_time = layer_load_times[i] if size > 0 else 0,
                                cuda_exec_time = layer_cuda_exec_times[i],
                                cuda_host_exec_time = layer_cuda_host_exec_times[i])
 
@@ -408,8 +413,7 @@ def save_trace_module(model_name, output_dir_path, do_trace=False):
     model = models.import_model(model_name)
     model.eval()
 
-    input_data = models.import_data(model_name, 1)
-    input_data = input_data.cuda()
+    x = models.import_data(model_name, 1)
 
     for d in range(torch.cuda.device_count()):
         trace_module_path = os.path.join(output_dir_path, f'model{d}.pt')
@@ -493,7 +497,7 @@ def generate_model_config(
 
     def get_load_layers(plans, engine_type):
         if engine_type == Prof.EngineType.PIPESWITCH:
-            for plan in plans: 
+            for plan in plans:
                 if plan.plan_type == Plan.PlanType.NAIVE:
                     return plan.load_layers
         elif engine_type == Prof.EngineType.DEEPPLAN:
@@ -512,7 +516,7 @@ def generate_model_config(
         for (batch_size, layer_profs) in layer_profs_list:
             for layer in layer_profs:
                 if layer.index in load_layers:
-                    layer.exec_type = ExecType.LTE 
+                    layer.exec_type = ExecType.LTE
                 else:
                     layer.exec_type = ExecType.DHA
 
