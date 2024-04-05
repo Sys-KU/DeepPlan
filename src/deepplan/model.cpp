@@ -73,6 +73,10 @@ void ModelInstance::load_layers(std::vector<int> load_layers, bool non_blocking)
   }
 }
 
+void ModelInstance::to(at::Device device, bool non_blocking) {
+  model.to(device, non_blocking);
+}
+
 Model::Model(const std::string name, const std::string model_path, const EngineType type, const std::vector<int> devices)
   : engine_type(type),
     libtorch::Model(name, model_path, devices[0]) {
@@ -198,7 +202,7 @@ torch::jit::IValue Model::forward(ScriptModuleInput& x) {
 }
 
 void Model::to(at::Device device, bool non_blocking) {
-  model.to(device, non_blocking);
+  model_instance->to(device, non_blocking);
   Device dest_device = device.is_cuda() ? Device::CUDA : Device::CPU;
 
   for (auto& iter : load_state_maps) {

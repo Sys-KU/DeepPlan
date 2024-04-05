@@ -73,14 +73,16 @@ void benchmark(CacheStudyOptions options) {
     total_load_ms = 0;
 
     for (int step = 0; step < num_warmup+num_test; step++) {
-      model->load_layers(i);
+      auto pre = model->load_layers(i);
+      model->model_instance->load_layers(pre.second);
 
       // TODO: remove recalculatation
-      load_size = util::getModuleSize(model->model, true);
+      auto post = model->load_layers();
+      load_size = post.first;
 
       t1 = util::now();
 
-      auto outputs = model->forward(inputs);
+      auto outputs = model->model_instance->forward(inputs, post.second);
 
       torch::cuda::synchronize(target_device.index());
       t2 = util::now();
@@ -93,8 +95,11 @@ void benchmark(CacheStudyOptions options) {
         model->clear();
         model->load_layers(i);
 
+        pre = model->load_layers(i);
+
         t1 = util::now();
-        model->load_layers(model->n_layers-i, true);
+
+        model->model_instance->load_layers(pre.second);
 
         torch::cuda::synchronize(target_device.index());
         t2 = util::now();

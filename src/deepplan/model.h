@@ -37,7 +37,9 @@ class ModelInstance {
 
   void reclaim_layers(std::vector<int> reclaiming_layers);
 
-  void load_layers(std::vector<int> load_layers, bool non_blocking);
+  void load_layers(std::vector<int> load_layers, bool non_blocking=false);
+
+  void to(at::Device device, bool non_blocking=false);
 
   void clear() {
     model.clear();
