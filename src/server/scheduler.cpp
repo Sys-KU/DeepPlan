@@ -31,6 +31,8 @@ void Scheduler::enqueue_request(
     std::function<void(serverapi::TimeoutResponse*)> timeout_cb) {
   int slo_ms = model_pool->get_model(request->model_id)->model_config.slo();
   request->deadline = request->arrival_time + slo_ms * 1e6;
+  req_scoreboard->update_window(request->model_id);
+
   requests_.emplace(request, cb, timeout_cb);
 }
 
@@ -57,8 +59,9 @@ void Scheduler::handle_requests() {
     uint64_t deadline = task.request->deadline;
 
     // FIXME(jinu): Add the max batchsize limitation.
-    while (!requests_.empty() && batch_size < 4) {
-      uint64_t next_estimated_time = model_pool->get_model_exec_time(model_id, batch_size+1);
+    int max_batch_size = model_pool->get_model(model_id)->model_config.max_batch_size();
+    while (!requests_.empty() && batch_size < max_batch_size) {
+      uint64_t next_estimated_time = model_pool->get_model_exec_time(model_id, batch_size+1) + lag;
       bool found = false;
       if (deadline > (exec_at + next_estimated_time) || task.request->disable_timeout) {
         for (auto it = requests_.begin(); it != requests_.end(); it++) {
@@ -86,8 +89,6 @@ void Scheduler::handle_requests() {
 
         throw std::runtime_error(ss.str());
       }
-
-      req_scoreboard->update_window(model_id);
 
       size_t uncached_size = model->uncached_size;
       uint64_t mem_size = mem.get_mem();
@@ -117,6 +118,8 @@ void Scheduler::handle_requests() {
 
       running_models->put(model_id, model);
 
+      uint64_t estimated_time = model_pool->get_model_exec_time(model_id, batch_size) + lag;
+
       auto [loaded_size, load_layers] = model->load_layers();
       mem.load_mem(action_seed_id, loaded_size);
 
@@ -127,7 +130,6 @@ void Scheduler::handle_requests() {
 
       InferAction action(action_seed_id, model_id, load_layers, tasks, i_cb);
 
-      uint64_t estimated_time = model_pool->get_model_exec_time(model_id, batch_size);
       exec.add_work(action_seed_id, estimated_time);
 
       action_seed_id++;

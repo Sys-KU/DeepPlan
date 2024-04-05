@@ -53,4 +53,5 @@ message ModelConfig {
     repeated Plan plans = 3;
     repeated Prof profs = 4;
     required uint32 slo = 5;
+    required uint32 max_batch_size = 6;
 }

@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto2',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x0e\x64\x65\x65pplan.proto\"M\n\nModelInput\x12\x1c\n\tdata_type\x18\x01 \x02(\x0e\x32\t.DataType\x12\r\n\x05shape\x18\x02 \x03(\r\x12\x12\n\nmax_number\x18\x03 \x01(\r\"n\n\x04Plan\x12!\n\tplan_type\x18\x01 \x02(\x0e\x32\x0e.Plan.PlanType\x12\x13\n\x0bload_layers\x18\x02 \x03(\r\".\n\x08PlanType\x12\t\n\x05NAIVE\x10\x01\x12\n\n\x06STATIC\x10\x02\x12\x0b\n\x07\x44YNAMIC\x10\x03\"\xd3\x02\n\x04Prof\x12%\n\x0b\x65ngine_type\x18\x01 \x02(\x0e\x32\x10.Prof.EngineType\x12\"\n\nexec_times\x18\x02 \x03(\x0b\x32\x0e.Prof.ExecTime\x12*\n\x0eoptimal_points\x18\x03 \x03(\x0b\x32\x12.Prof.OptimalPoint\x12\x18\n\x10layer_load_times\x18\x04 \x03(\x01\x12\x13\n\x0blayer_sizes\x18\x05 \x03(\r\x1a/\n\x08\x45xecTime\x12\x12\n\nbatch_size\x18\x01 \x02(\r\x12\x0f\n\x07\x65xec_ns\x18\x02 \x02(\x01\x1aH\n\x0cOptimalPoint\x12\x12\n\nbatch_size\x18\x01 \x02(\r\x12\x11\n\tlayer_idx\x18\x02 \x02(\r\x12\x11\n\tload_size\x18\x03 \x02(\r\"*\n\nEngineType\x12\x0e\n\nPIPESWITCH\x10\x01\x12\x0c\n\x08\x44\x45\x45PPLAN\x10\x02\"w\n\x0bModelConfig\x12\x12\n\nmodel_name\x18\x01 \x02(\t\x12\x1b\n\x06inputs\x18\x02 \x03(\x0b\x32\x0b.ModelInput\x12\x14\n\x05plans\x18\x03 \x03(\x0b\x32\x05.Plan\x12\x14\n\x05profs\x18\x04 \x03(\x0b\x32\x05.Prof\x12\x0b\n\x03slo\x18\x05 \x02(\r*9\n\x08\x44\x61taType\x12\r\n\tTYPE_FP32\x10\x01\x12\x0e\n\nTYPE_INT32\x10\x02\x12\x0e\n\nTYPE_INT64\x10\x03'
+  serialized_pb=b'\n\x0e\x64\x65\x65pplan.proto\"M\n\nModelInput\x12\x1c\n\tdata_type\x18\x01 \x02(\x0e\x32\t.DataType\x12\r\n\x05shape\x18\x02 \x03(\r\x12\x12\n\nmax_number\x18\x03 \x01(\r\"n\n\x04Plan\x12!\n\tplan_type\x18\x01 \x02(\x0e\x32\x0e.Plan.PlanType\x12\x13\n\x0bload_layers\x18\x02 \x03(\r\".\n\x08PlanType\x12\t\n\x05NAIVE\x10\x01\x12\n\n\x06STATIC\x10\x02\x12\x0b\n\x07\x44YNAMIC\x10\x03\"\xd3\x02\n\x04Prof\x12%\n\x0b\x65ngine_type\x18\x01 \x02(\x0e\x32\x10.Prof.EngineType\x12\"\n\nexec_times\x18\x02 \x03(\x0b\x32\x0e.Prof.ExecTime\x12*\n\x0eoptimal_points\x18\x03 \x03(\x0b\x32\x12.Prof.OptimalPoint\x12\x18\n\x10layer_load_times\x18\x04 \x03(\x01\x12\x13\n\x0blayer_sizes\x18\x05 \x03(\r\x1a/\n\x08\x45xecTime\x12\x12\n\nbatch_size\x18\x01 \x02(\r\x12\x0f\n\x07\x65xec_ns\x18\x02 \x02(\x01\x1aH\n\x0cOptimalPoint\x12\x12\n\nbatch_size\x18\x01 \x02(\r\x12\x11\n\tlayer_idx\x18\x02 \x02(\r\x12\x11\n\tload_size\x18\x03 \x02(\r\"*\n\nEngineType\x12\x0e\n\nPIPESWITCH\x10\x01\x12\x0c\n\x08\x44\x45\x45PPLAN\x10\x02\"\x8f\x01\n\x0bModelConfig\x12\x12\n\nmodel_name\x18\x01 \x02(\t\x12\x1b\n\x06inputs\x18\x02 \x03(\x0b\x32\x0b.ModelInput\x12\x14\n\x05plans\x18\x03 \x03(\x0b\x32\x05.Plan\x12\x14\n\x05profs\x18\x04 \x03(\x0b\x32\x05.Prof\x12\x0b\n\x03slo\x18\x05 \x02(\r\x12\x16\n\x0emax_batch_size\x18\x06 \x02(\r*9\n\x08\x44\x61taType\x12\r\n\tTYPE_FP32\x10\x01\x12\x0e\n\nTYPE_INT32\x10\x02\x12\x0e\n\nTYPE_INT64\x10\x03'
 )
 
 _DATATYPE = _descriptor.EnumDescriptor(
@@ -48,8 +48,8 @@ _DATATYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=672,
-  serialized_end=729,
+  serialized_start=697,
+  serialized_end=754,
 )
 _sym_db.RegisterEnumDescriptor(_DATATYPE)
 
@@ -388,6 +388,13 @@ _MODELCONFIG = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='max_batch_size', full_name='ModelConfig.max_batch_size', index=5,
+      number=6, type=13, cpp_type=3, label=2,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -400,8 +407,8 @@ _MODELCONFIG = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=551,
-  serialized_end=670,
+  serialized_start=552,
+  serialized_end=695,
 )
 
 _MODELINPUT.fields_by_name['data_type'].enum_type = _DATATYPE

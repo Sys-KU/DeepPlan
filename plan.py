@@ -433,11 +433,13 @@ def save_trace_module(model_name, output_dir_path, do_trace=False):
 def generate_model_config(
         model_name: str,
         plans: List[Plan],
+        max_batch_size: int,
         slo: int,
         output_dir_path: str):
     model_config = ModelConfig()
     model_config.model_name = model_name
     model_config.slo = slo
+    model_config.max_batch_size = max_batch_size
 
     input_data = models.import_data(model_name, 1)
     input_data = input_data.cuda()
@@ -453,16 +455,9 @@ def generate_model_config(
 
         model_config.inputs.append(model_input)
 
-    def explore_optimal_point(layers):
+    def explore_optimal_point(layers, exec_time):
         optimal_idx = 0
         optimal_load_size = 0
-
-        exec_time = 0
-        for layer in layers:
-            exec_time += (
-                layer.cuda_exec_time if layer.exec_type == ExecType.LTE else
-                layer.cuda_host_exec_time
-            )
 
         for i in range(len(layers)):
             load_time = sum(
@@ -513,7 +508,19 @@ def generate_model_config(
         prof.engine_type = engine_type
         load_layers = get_load_layers(plans, engine_type)
 
+        model = models.import_model(model_name)
+        model.eval()
+
         for (batch_size, layer_profs) in layer_profs_list:
+            layers = util.travel_layers(model)
+
+            model.cpu()
+            model.cuda_host()
+
+            for idx in load_layers:
+                layers[idx].cpu()
+                layers[idx].cuda()
+
             for layer in layer_profs:
                 if layer.index in load_layers:
                     layer.exec_type = ExecType.LTE
@@ -528,12 +535,34 @@ def generate_model_config(
                     else layer.cuda_host_exec_time
                     for layer in layer_profs
             )
+
+            input_data = models.import_data(model_name, batch_size)
+            input_data = input_data.cuda()
+
+            exec_times = []
+            for step in range(num_warmup+num_test):
+                event1 = torch.cuda.Event(enable_timing=True)
+                event2 = torch.cuda.Event(enable_timing=True)
+
+                event1.record()
+
+                model(input_data)
+                event2.record()
+
+                event1.synchronize()
+                event2.synchronize()
+
+
+                if step >= num_warmup:
+                    exec_times.append(event1.elapsed_time(event2))
+
+            exec_ms = max(exec_times)
             exec_time.exec_ns = exec_ms * 1e6
 
             prof.exec_times.append(exec_time)
 
             optimal_point = Prof.OptimalPoint()
-            optimal_idx, optimal_load_size = explore_optimal_point(layer_profs)
+            optimal_idx, optimal_load_size = explore_optimal_point(layer_profs, exec_ms)
             optimal_point.batch_size = batch_size
             optimal_point.layer_idx = optimal_idx
             optimal_point.load_size = optimal_load_size
@@ -614,4 +643,4 @@ if __name__ == "__main__":
 
     save_trace_module(model_name, output_dir_path, do_trace)
 
-    generate_model_config(model_name, plans, slo, output_dir_path)
+    generate_model_config(model_name, plans, max_batch_size, slo, output_dir_path)

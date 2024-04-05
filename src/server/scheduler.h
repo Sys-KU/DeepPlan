@@ -270,6 +270,8 @@ class Scheduler {
 
   size_t capacity_;
 
+  uint64_t lag = 1e6;
+
   ReclaimPolicy r_policy_;
   util::LRUCache<int, deepplan::Model*>* running_models;
   RequestScoreboard* req_scoreboard = nullptr;
