@@ -3,11 +3,13 @@
 #include <time_util.h>
 
 Workload::Workload(int concurrency, int rate, int n_requests,
-                   std::string dist_type, std::string addr, std::string port)
+                   std::string dist_type, bool disable_timeout,
+                   std::string addr, std::string port)
     : concurrency(concurrency),
       rate(rate),
       n_requests(n_requests),
       _traces(n_requests),
+      disable_timeout(disable_timeout),
       addr(addr),
       port(port) {
         std::minstd_rand gen(0);
@@ -34,11 +36,13 @@ Workload::Workload(int concurrency, int rate, int n_requests,
       };
 
 Workload::Workload(int concurrency, int rate, int n_requests,
-                   float alpha, std::string addr, std::string port)
+                   float alpha, bool disable_timeout,
+                   std::string addr, std::string port)
     : concurrency(concurrency),
       rate(rate),
       n_requests(n_requests),
       _traces(n_requests),
+      disable_timeout(disable_timeout),
       addr(addr),
       port(port) {
         std::minstd_rand gen(0);
@@ -55,9 +59,10 @@ Workload::Workload(int concurrency, int rate, int n_requests,
         }
       };
 
-Workload::Workload(std::vector<unsigned>& rates,
+Workload::Workload(std::vector<unsigned>& rates, bool disable_timeout,
                    std::string addr, std::string port)
   : _traces(0),
+    disable_timeout(disable_timeout),
     addr(addr),
     port(port) {
       std::minstd_rand gen(0);
@@ -113,7 +118,7 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
       }
     };
 
-    client.infer_async(inputs[model_id], model_id, onSuccess);
+    client.infer_async(inputs[model_id], model_id, onSuccess, disable_timeout);
   }
 
   client.shutdown();

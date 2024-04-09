@@ -63,7 +63,9 @@ void Scheduler::handle_requests() {
     while (!requests_.empty() && batch_size < max_batch_size) {
       uint64_t next_estimated_time = model_pool->get_model_exec_time(model_id, batch_size+1) + lag;
       bool found = false;
-      if (deadline > (exec_at + next_estimated_time) || task.request->disable_timeout) {
+      // If the SLO is violated, stop increasing the batch size.
+      if (deadline > (exec_at + next_estimated_time) ||
+          (task.request->disable_timeout && tasks.empty())) {
         for (auto it = requests_.begin(); it != requests_.end(); it++) {
           if (it->request->model_id == model_id) {
             tasks.push_back(*it);

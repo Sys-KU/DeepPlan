@@ -49,7 +49,7 @@ void ClientOptions::print_usage(char* program_name) {
       "\t\t--concurrency/-c CONCURRENCY --rate/-r RATE [--mp_size/-p MP_SIZE]\n"
       "\t\t[--engine/-e {in_memory,demand,pipeline,deepplan,deepcache}]\n"
       "\t\t[--r_policy {rr, balance}]\n"
-      "\t\t[--dump/-d] [--alpha/-a]\n",
+      "\t\t[--dump/-d] [--alpha/-a] [--disable_timeout]\n",
       program_name);
 }
 
@@ -66,6 +66,7 @@ void ClientOptions::parseOptions(int argc, char** argv) {
     {"engine",        required_argument,  0,  'e' },
     {"r_policy",      required_argument,  0,   0  },
     {"alpha",         required_argument,  0,  'a' },
+    {"disable_timeout", no_argument,      0,   0  },
     {"dump",          required_argument,  0,  'd' },
     {0, 0, 0, 0}
   };
@@ -91,6 +92,7 @@ void ClientOptions::parseOptions(int argc, char** argv) {
   this->r_policy  = ReclaimPolicy::RR;
   this->alpha     = 1.5;
   this->dump      = "";
+  this->disable_timeout = false;
 
   while ((flag = getopt_long(argc, argv, "a:c:d:e:hm:r:w:p:", long_options, &option_index)) != -1) {
     switch (flag) {
@@ -117,6 +119,9 @@ void ClientOptions::parseOptions(int argc, char** argv) {
             fprintf(stderr, ")\n");
             exit(EXIT_FAILURE);
           }
+        }
+        if (long_options[option_index].name == "disable_timeout") {
+          this->disable_timeout = true;
         }
         break;
       case 'h':

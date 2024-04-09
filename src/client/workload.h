@@ -16,12 +16,14 @@ struct WorkloadResult {
 class Workload {
  public:
   Workload(int concurrency, int rate, int n_requests,
-           std::string dist_type, std::string addr, std::string port);
+           std::string dist_type, bool disable_timeout,
+           std::string addr, std::string port);
 
   Workload(int concurrency, int rate, int n_requests,
-           float alpha, std::string addr, std::string port);
+           float alpha, bool disable_timeout,
+           std::string addr, std::string port);
 
-  Workload(std::vector<unsigned>& rates,
+  Workload(std::vector<unsigned>& rates, bool disable_timeout,
            std::string addr, std::string port);
 
   void run(std::vector<std::vector<char>>& inputs);
@@ -36,6 +38,7 @@ class Workload {
   int concurrency;
   int rate;
   int n_requests;
+  bool disable_timeout;
   std::string addr;
   std::string port;
 

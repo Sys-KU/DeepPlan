@@ -14,6 +14,7 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
   float alpha = options.alpha;
+  bool disable_timeout = options.disable_timeout;
 
   int n_warmup = options.n_warmup;
   int n_test = rate * 100;
@@ -28,8 +29,10 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
     alpha = 0.f;
   }
 
-  auto warmup = new Workload(concurrency, rate, n_warmup, alpha, "127.0.0.1", "4321");
-  auto workload = new Workload(concurrency, rate, n_test, alpha, "127.0.0.1", "4321");
+  auto warmup = new Workload(concurrency, rate, n_warmup, alpha,
+                             disable_timeout, "127.0.0.1", "4321");
+  auto workload = new Workload(concurrency, rate, n_test, alpha,
+                               disable_timeout,"127.0.0.1", "4321");
 
   std::cout << "Warmup...\n";
   warmup->run(model_loader->inputs);
@@ -60,6 +63,7 @@ void bursty_experiment(ClientOptions options) {
   int mp_size = options.mp_size;
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
+  bool disable_timeout = options.disable_timeout;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
                                       r_policy, mp_size, "127.0.0.1", "4321");
@@ -70,9 +74,11 @@ void bursty_experiment(ClientOptions options) {
   std::vector<Workload*> warmups;
   std::vector<Workload*> workloads;
   for (int i = 1; i <= concurrency; i++) {
-    warmups.push_back(new Workload(i, rate, rate, "uniform", "127.0.0.1", "4321"));
+    warmups.push_back(new Workload(i, rate, rate, "uniform", disable_timeout,
+                                   "127.0.0.1", "4321"));
 
-    workloads.push_back(new Workload(i, rate, rate, "uniform", "127.0.0.1", "4321"));
+    workloads.push_back(new Workload(i, rate, rate, "uniform", disable_timeout,
+                                     "127.0.0.1", "4321"));
   }
 
   std::cout << "Bursty Experiment\n";
@@ -96,6 +102,7 @@ void azure_experiment(ClientOptions options) {
   int mp_size = options.mp_size;
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
+  bool disable_timeout = options.disable_timeout;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
                                       r_policy, mp_size, "127.0.0.1", "4321");
@@ -110,7 +117,8 @@ void azure_experiment(ClientOptions options) {
   int period = 180;
   std::vector<Workload*> workloads;
   for (int p = 0; p < period; p++) {
-    workloads.push_back(new Workload(scaled_traces[p], "127.0.0.1", "4321"));
+    workloads.push_back(new Workload(scaled_traces[p], disable_timeout,
+                                     "127.0.0.1", "4321"));
   }
 
   std::cout << "Azure Experiment\n";

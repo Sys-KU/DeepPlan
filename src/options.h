@@ -34,6 +34,7 @@ struct ClientOptions : public Options{
   ReclaimPolicy r_policy;
   int slo;
   float alpha;
+  bool disable_timeout;
   std::string dump;
   int n_warmup;
   int n_test;
