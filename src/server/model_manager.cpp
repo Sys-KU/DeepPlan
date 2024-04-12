@@ -23,7 +23,7 @@ bool ModelManager::setup(std::vector<std::string> model_names, int num_models,
 
   // Update if the setting parameters are different
   if ((model_names_ != model_names) ||
-      (num_models_ != num_models) ||
+      (num_models_ < num_models) ||
       (engine_type_ != engine_type) ||
       (mp_size_ != mp_size)) {
     should_setup = true;
