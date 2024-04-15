@@ -111,8 +111,8 @@ class Model : public libtorch::Model {
 
   std::unordered_map<int, std::vector<int>> device_map;
 
-  size_t optimal_size;
-  uint32_t optimal_idx;
+  std::vector<size_t> optimal_sizes;
+  std::vector<uint32_t> optimal_idxs;
 
   Prof prof;
 };

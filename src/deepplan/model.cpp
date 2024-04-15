@@ -120,8 +120,8 @@ void Model::init() {
       }
 
       for (auto optimal_point : prof.optimal_points()) {
-        this->optimal_size = optimal_point.load_size();
-        this->optimal_idx = optimal_point.layer_idx();
+        this->optimal_sizes.push_back(optimal_point.load_size());
+        this->optimal_idxs.push_back(optimal_point.layer_idx());
         break;
       }
       break;
@@ -141,9 +141,8 @@ void Model::init() {
       }
 
       for (auto optimal_point : prof.optimal_points()) {
-        this->optimal_size = optimal_point.load_size();
-        this->optimal_idx = optimal_point.layer_idx();
-        break;
+        this->optimal_sizes.push_back(optimal_point.load_size());
+        this->optimal_idxs.push_back(optimal_point.layer_idx());
       }
       break;
     default:

@@ -1,4 +1,5 @@
 #include <util.h>
+#include <server/util.h>
 #include <options.h>
 #include <network/session.h>
 #include <server/model_manager.h>
@@ -7,51 +8,6 @@
 #include <optional>
 #include <set>
 #include <mutex>
-
-
-class RequestScoreboard {
- public:
-  RequestScoreboard(int num_models, int window_size)
-   : scores(num_models, 0),
-     window_size_(window_size) {}
-
-  RequestScoreboard(int window_size)
-   : window_size_(window_size) {}
-
-  void update_window(int model_id) {
-    req_window.push(model_id);
-
-    scores[model_id]++;
-
-    if (req_window.size() > window_size_) {
-      scores[req_window.front()]--;
-      req_window.pop();
-    }
-  }
-
-  int get(int model_id) {
-    return scores[model_id];
-  }
-
-  void clear() {
-    while (!req_window.empty()) {
-      req_window.pop();
-    }
-    std::fill(scores.begin(), scores.end(), 0);
-  }
-
-  void expand(int num_models) {
-    scores.resize(scores.size() + num_models);
-    std::fill(scores.begin(), scores.end(), 0);
-  }
-
- private:
-  std::queue<int> req_window;
-
-  std::vector<int> scores;
-
-  int window_size_;
-};
 
 
 class CFR {
@@ -275,6 +231,7 @@ class Scheduler {
   ReclaimPolicy r_policy_;
   util::LRUCache<int, deepplan::Model*>* running_models;
   RequestScoreboard* req_scoreboard = nullptr;
+  std::vector<util::WindowBuf<int>> window_bufs;
   CFR* cfr;
   std::list<util::LRUCache<int, deepplan::Model*>*> partial_models_list;
 };

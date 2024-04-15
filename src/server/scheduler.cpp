@@ -135,6 +135,11 @@ void Scheduler::handle_requests() {
       exec.add_work(action_seed_id, estimated_time);
 
       action_seed_id++;
+
+      // Track the batch size for dynamic adjustment to the optimal point used
+      // in reclaiming memory
+      window_bufs[model_id].update(batch_size);
+
       worker_->infer(action);
     }
     else {
@@ -268,7 +273,15 @@ ReclaimingOutput Scheduler::preempt_models() {
               running_models->pop(&evict_id));
           output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
 
-          if (evict_model->uncached_size >= evict_model->optimal_size) {
+          auto batch_window = window_bufs[evict_id].get_buf();
+          assert(!batch_window.empty());
+
+          auto min_batch_size = (*std::min_element(batch_window.begin(),
+                                                   batch_window.end()));
+
+          size_t optimal_size = evict_model->optimal_sizes[min_batch_size - 1];
+
+          if (evict_model->uncached_size >= optimal_size) {
             // Delegate the model to RR.
             partial_models->put(evict_id, evict_model);
           }
@@ -312,9 +325,17 @@ ReclaimingOutput Scheduler::preempt_models() {
               running_models->pop(&evict_id));
           output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
 
-          if (evict_model->uncached_size >= evict_model->optimal_size) {
+          auto batch_window = window_bufs[evict_id].get_buf();
+          assert(!batch_window.empty());
+
+          auto min_batch_size = (*std::min_element(batch_window.begin(),
+                                                   batch_window.end()));
+
+          size_t optimal_size = evict_model->optimal_sizes[min_batch_size - 1];
+
+          if (evict_model->uncached_size >= optimal_size) {
             // Delegate the model to CFR.
-            cfr->put(evict_id, req_scoreboard->get(evict_id));
+            cfr->put(evict_id, req_scoreboard->get_score(evict_id));
           }
           else {
             running_models->put_back(evict_id, evict_model);
@@ -332,7 +353,7 @@ ReclaimingOutput Scheduler::preempt_models() {
 
           assert(evict_model->uncached_size <= evict_model->model_size);
           if (evict_model->uncached_size < evict_model->model_size) {
-            cfr->put(evict_model_id, vruntime + req_scoreboard->get(evict_model_id));
+            cfr->put(evict_model_id, vruntime + req_scoreboard->get_score(evict_model_id));
           }
 
           found = true;
@@ -401,7 +422,12 @@ void Scheduler::sync_setup() {
 
   c10::cuda::CUDACachingAllocator::emptyCache();
 
-  req_scoreboard->expand(model_pool->get_num_models());
+  int num_models = model_pool->get_num_models();
+  req_scoreboard->resize(num_models);
+  window_bufs.resize(num_models);
+  for (auto& buf : window_bufs) {
+    buf.resize(10); // default size of window trakcing the batch size is 10
+  }
 
   std::vector<ModelInstance*> model_instances;
   for (auto model : model_pool->models) {

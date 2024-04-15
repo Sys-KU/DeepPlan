@@ -3,6 +3,7 @@
 #include <torch/script.h>
 #include <vector>
 #include <map>
+#include <deque>
 #include <cstdint>
 #include <deepplan.pb.h>
 #include <google/protobuf/text_format.h>
@@ -197,5 +198,53 @@ class progressbar {
     int bar_width;
 };
 
+template<typename T>
+class WindowBuf {
+ public:
+  WindowBuf(int window_size)
+    : window_size_(window_size) {};
+
+  // default size is 100
+  WindowBuf()
+    : window_size_(100) {};
+
+  virtual void update(T data) {
+    if (full()) {
+      buf_.pop_front();
+    }
+
+    buf_.push_back(data);
+  }
+
+  std::deque<T> get_buf() {
+    return buf_;
+  }
+
+  T front() {
+    return buf_.front();
+  }
+
+  T back() {
+    return buf_.back();
+  }
+
+  bool full() {
+    return buf_.size() >= window_size_;
+  }
+
+  void clear() {
+    buf_.clear();
+  }
+
+  void resize(int window_size) {
+    clear();
+    window_size_ = window_size;
+  }
+
+ private:
+  std::deque<T> buf_;
+
+  int window_size_;
+};
 
 } // namespace util
