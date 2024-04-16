@@ -212,7 +212,7 @@ class Scheduler {
 
   MemoryTracker mem;
 
-  std::set<InferTask> requests_;
+  std::multiset<InferTask> requests_;
 
   std::queue<InferTask> timeouts_;
 

@@ -120,7 +120,7 @@ void Scheduler::handle_requests() {
 
       running_models->put(model_id, model);
 
-      uint64_t estimated_time = model_pool->get_model_exec_time(model_id, batch_size) + lag;
+      uint64_t estimated_time = model->get_model_exec_time(batch_size) + lag;
 
       auto [loaded_size, load_layers] = model->load_layers();
       mem.load_mem(action_seed_id, loaded_size);
