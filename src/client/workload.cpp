@@ -168,12 +168,14 @@ void Workload::dump(std::string dump_file) {
 
 ModelLoader::ModelLoader(std::vector<std::string> model_names, int n_models,
                          EngineType engine_type, ReclaimPolicy r_policy,
-                         int mp_size, std::string addr, std::string port)
+                         int mp_size, bool disable_prefetch, std::string addr,
+                         std::string port)
   : model_names(model_names),
     n_models(n_models),
     engine_type(engine_type),
     r_policy(r_policy),
     mp_size(mp_size),
+    disable_prefetch(disable_prefetch),
     addr(addr),
     port(port) {};
 
@@ -189,7 +191,8 @@ void ModelLoader::run() {
     input_generator.generate_input(model_names[i/n_models_per_type], 1, &inputs[i]);
   }
 
-  client.upload_model(model_names, n_models, engine_type, r_policy, mp_size);
+  client.upload_model(
+      model_names, n_models, engine_type, r_policy, mp_size, disable_prefetch);
 
   for (int i = 0; i < n_models; i++) {
     auto onSuccess = [this](serverapi::Response* rsp) {};

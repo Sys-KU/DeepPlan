@@ -21,6 +21,10 @@ torch::jit::IValue RunEngine(
     at::Device target_device,
     std::unordered_map<int, std::vector<ScriptModule>>& device_map);
 
+void LoadLayers(
+    at::Device target_device,
+    std::unordered_map<int, std::vector<ScriptModule>>& device_map);
+
 void Init(void);
 
 void Deinit(void);

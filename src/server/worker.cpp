@@ -18,6 +18,7 @@ Worker::Worker(int device, const ServerOptions& options,
         name = "Worker" + std::to_string(device);
       }
       worker_thr = std::thread(std::bind(&Worker::run, this));
+      loader_thr = std::thread(std::bind(&Worker::run_loader, this));
     }
 
 Worker::~Worker() {
@@ -36,8 +37,6 @@ void Worker::run() {
 
   while (alive) {
     while (queue_.try_pop(action)) {
-      auto response = new serverapi::InferenceResponse();
-      bool is_cold = false;
       double t1, t2;
 
       if (auto infer_action = std::dynamic_pointer_cast<InferAction>(action)) {
@@ -57,21 +56,16 @@ void Worker::run() {
           inputs.push_back(torch::cat(input_tensors));
         }
 
-        if (!infer_action->layers.empty()) {
-          is_cold = true;
-        }
-        num_colds += is_cold;
+        num_colds += infer_action->is_cold;
 
         t1 = util::now();
-        model_instance->forward(inputs, infer_action->layers);
+        model_instance->forward(inputs, {});
 
-        torch::cuda::synchronize(device.index());
         t2 = util::now();
 
         infer_time = t2 - t1;
 
-        auto end_size = getDeviceActiveMemorySize(device.index());
-        infer_action->complete(infer_time, end_size, is_cold);
+        infer_action->complete(infer_time);
 
         total_infer_time += (infer_time / 1e6);
         num_reqs++;
@@ -88,6 +82,25 @@ void Worker::run() {
 
           last_logging_time = now;
         }
+      }
+    }
+  }
+}
+
+void Worker::run_loader() {
+  std::shared_ptr<Action> action;
+
+  while (alive) {
+    while (load_queue_.try_pop(action)) {
+      if (auto load_action = std::dynamic_pointer_cast<LoadAction>(action)) {
+        int model_id = load_action->model_id;
+
+        auto model_instance = model_instances[model_id];
+
+        model_instance->load_layers(load_action->layers);
+
+        auto end_size = getDeviceActiveMemorySize(device.index());
+        load_action->complete(end_size);
       }
       else if (auto reclaim_action = std::dynamic_pointer_cast<ReclaimAction>(action)) {
         auto outputs = reclaim_action->outputs;
@@ -109,6 +122,8 @@ void Worker::stop() {
   alive = false;
   if (worker_thr.joinable())
     worker_thr.join();
+  if (loader_thr.joinable())
+    loader_thr.join();
 }
 
 void Worker::infer(InferAction infer_action) {
@@ -116,5 +131,9 @@ void Worker::infer(InferAction infer_action) {
 }
 
 void Worker::reclaim(ReclaimAction reclaim_action) {
-  queue_.push(std::make_shared<ReclaimAction>(reclaim_action));
+  load_queue_.push(std::make_shared<ReclaimAction>(reclaim_action));
+}
+
+void Worker::load(LoadAction load_action) {
+  load_queue_.push(std::make_shared<LoadAction>(load_action));
 }

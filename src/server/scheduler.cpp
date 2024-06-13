@@ -37,120 +37,211 @@ void Scheduler::enqueue_request(
 }
 
 void Scheduler::handle_requests() {
-  InferTask task;
-  std::unordered_map<int, std::vector<InferTask>> task_maps;
+  {
+    std::lock_guard<std::mutex> guard(tracker_mutex);
+    std::shared_ptr<Completion> comp;
 
-  while (!requests_.empty()) {
-    uint64_t exec_at;
-    uint64_t now = util::now();
+    for (; !completion_queue_.empty(); completion_queue_.pop()) {
+      comp = completion_queue_.front();
+      if (auto i_comp = std::dynamic_pointer_cast<InferCompletion>(comp)) {
+        int action_id = i_comp->action_id;
+        uint64_t end_time = i_comp->end_time;
+        int model_id = i_comp->model_id;
 
-    exec_at = exec.available();
+        exec.update(action_id, end_time);
 
-    uint64_t schedule_until = now + schedule_ahead;
-    if (exec_at >= schedule_until) {
-      break;
-    }
+        auto model = model_pool->get_model(model_id);
 
-    task = *requests_.begin();
-
-    std::vector<InferTask> tasks;
-    int model_id = task.request->model_id;
-    int batch_size = 0;
-    uint64_t deadline = task.request->deadline;
-
-    // FIXME(jinu): Add the max batchsize limitation.
-    int max_batch_size = model_pool->get_model(model_id)->model_config.max_batch_size();
-    while (!requests_.empty() && batch_size < max_batch_size) {
-      uint64_t next_estimated_time = model_pool->get_model_exec_time(model_id, batch_size+1) + lag;
-      bool found = false;
-      // If the SLO is violated, stop increasing the batch size.
-      if (deadline > (exec_at + next_estimated_time) ||
-          (task.request->disable_timeout && tasks.empty())) {
-        for (auto it = requests_.begin(); it != requests_.end(); it++) {
-          if (it->request->model_id == model_id) {
-            tasks.push_back(*it);
-            batch_size++;
-            requests_.erase(it);
-            found = true;
-            break;
-          }
+        if ((--model_ref_cnts[model_id]) == 0) {
+          running_models->put(model_id, model);
         }
       }
-      if (!found) {
-        break;
+      else if (auto l_comp = std::dynamic_pointer_cast<LoadCompletion>(comp)) {
+        int action_id = l_comp->action_id;
+        uint64_t end_time = l_comp->end_time;
+        uint64_t end_size = l_comp->end_size;
+        mem.update(action_id, end_time, end_size);
+      }
+      else if (auto r_comp = std::dynamic_pointer_cast<ReclaimCompletion>(comp)) {
+        int action_id = r_comp->action_id;
+        uint64_t end_time = r_comp->end_time;
+        uint64_t end_size = r_comp->end_size;
+
+        mem.update(action_id, end_time, end_size);
       }
     }
+  }
 
-    if (!tasks.empty()) {
-      bool is_cold = false;
-      auto model = find_model(model_id, &is_cold);
-
-      if (model == nullptr) {
-        std::stringstream ss;
-        ss << "Not found the model with id " << model_id << "\n";
-
-        throw std::runtime_error(ss.str());
-      }
-
-      size_t uncached_size = model->uncached_size;
-      uint64_t mem_size = mem.get_mem();
-      uint64_t reclaimed_size = 0;
-      std::vector<ReclaimingOutput> outputs;
-      while ((mem_size + uncached_size - reclaimed_size)
-             >= capacity_) {
-        auto output = preempt_models();
-
-        reclaimed_size += output.size;
-
-        outputs.push_back(std::move(output));
-      }
-
-      if (!outputs.empty()) {
-        auto r_cb = [&mem = mem](int action_id, uint64_t end_size) {
-          mem.update(action_id, end_size);
-        };
-
-        mem.reclaim_mem(action_seed_id, reclaimed_size);
-
-        ReclaimAction action(action_seed_id, outputs, r_cb);
-        worker_->reclaim(action);
-
-        action_seed_id++;
-      }
-
-      running_models->put(model_id, model);
-
-      uint64_t estimated_time = model->get_model_exec_time(batch_size) + lag;
-
-      auto [loaded_size, load_layers] = model->load_layers();
-      mem.load_mem(action_seed_id, loaded_size);
-
-      auto i_cb = [&exec = exec, &mem = mem](int action_id, uint64_t end_time, uint64_t end_size) {
-        exec.update(action_id, end_time);
-        mem.update(action_id, end_size);
-      };
-
-      InferAction action(action_seed_id, model_id, load_layers, tasks, i_cb);
-
-      exec.add_work(action_seed_id, estimated_time);
-
-      action_seed_id++;
-
-      // Track the batch size for dynamic adjustment to the optimal point used
-      // in reclaiming memory
-      window_bufs[model_id].update(batch_size);
-
-      worker_->infer(action);
-    }
-    else {
-      // Requests violoting the deadline are handled in
-      // handle_timout().
-      timeouts_.push(task);
-      requests_.erase(requests_.begin());
-    }
+  auto now = util::now();
+  if (!requests_.empty()) {
+    handle_load(now);
+    handle_exec(now);
   }
 }
 
+void Scheduler::handle_load(const uint64_t now) {
+  InferTask task;
+
+  if (!allow_prefetch) {
+    uint64_t exec_at;
+    exec_at = exec.available(now);
+
+    uint64_t schedule_until = now + schedule_ahead;
+    if (exec_at >= schedule_until) {
+      return;
+    }
+  }
+
+  uint64_t load_at;
+  load_at = mem.available(now);
+
+  uint64_t load_until = now + load_ahead;
+  if (load_at >= load_until) {
+    return;
+  }
+
+  task = *requests_.begin();
+  int model_id = task.request->model_id;
+  auto model = find_model(model_id);
+
+  if (model == nullptr) {
+    std::stringstream ss;
+    ss << "Not found the model with id " << model_id << "\n";
+
+    throw std::runtime_error(ss.str());
+  }
+
+  size_t uncached_size = model->uncached_size;
+  if (uncached_size > 0) {
+    auto [loaded_size, load_layers] = model->load_layers();
+    uint64_t estimated_load_time = model->get_load_time() + lag;
+
+    reclaim_gpu_memory(uncached_size);
+
+    auto l_cb = [&mutex = tracker_mutex, &queue = completion_queue_](
+        int action_id, uint64_t end_time, uint64_t end_size) {
+      std::lock_guard<std::mutex> guard(mutex);
+      queue.push(std::make_shared<LoadCompletion>(action_id, end_time, end_size));
+    };
+    mem.load_mem(action_seed_id, model_id, estimated_load_time, loaded_size);
+    LoadAction action(action_seed_id, model_id, load_layers, l_cb);
+    worker_->load(action);
+
+    action_seed_id++;
+  }
+}
+
+void Scheduler::handle_exec(const uint64_t now) {
+  InferTask task;
+
+  uint64_t exec_at;
+
+  exec_at = exec.available(now);
+
+  uint64_t schedule_until = now + schedule_ahead;
+  if (exec_at >= schedule_until) {
+    return;
+  }
+
+  for (auto it = requests_.begin(); it != requests_.end(); it++) {
+    int model_id = it->request->model_id;
+    auto model = model_pool->get_model(model_id);
+    if (model->engine_type >= EngineType::PIPESWITCH) {
+      task = *it;
+      break;
+    }
+    else if (model->engine_type <= EngineType::ON_DEMAND) {
+      // Skip scheduling the models that are not loaded.
+      if (model->uncached_size > 0) {
+        continue;
+      }
+      if (mem.end_time(model_id) > 0) {
+        continue;
+      }
+      task = *it;
+    }
+  }
+
+  if (!task.request) {
+    return;
+  }
+
+  std::vector<InferTask> tasks;
+  int model_id = task.request->model_id;
+  auto model = find_model(model_id);
+  if (model == nullptr) {
+    std::stringstream ss;
+    ss << "Not found the model with id " << model_id << "\n";
+
+    throw std::runtime_error(ss.str());
+  }
+
+  int batch_size = 0;
+  uint64_t end_load_time = mem.end_time(model_id);
+  uint64_t deadline = task.request->deadline;
+
+  int max_batch_size = model_pool->get_model(model_id)->model_config.max_batch_size();
+  while (!requests_.empty() && batch_size < max_batch_size) {
+    uint64_t next_estimated_time = model_pool->get_model_exec_time(model_id, batch_size+1) + lag;
+    bool found = false;
+    // If the SLO is violated, stop increasing the batch size.
+    uint64_t complete_time = std::max(exec_at + next_estimated_time,
+                                      end_load_time);
+    if (deadline > complete_time ||
+        (task.request->disable_timeout && tasks.empty())) {
+      for (auto it = requests_.begin(); it != requests_.end(); it++) {
+        if (it->request->model_id == model_id) {
+          tasks.push_back(*it);
+          batch_size++;
+          requests_.erase(it);
+          found = true;
+          break;
+        }
+      }
+    }
+    if (!found) {
+      break;
+    }
+  }
+
+  if (!tasks.empty()) {
+    uint64_t exec_time = model->get_model_exec_time(batch_size) + lag;
+    uint64_t estimated_time;
+    if (end_load_time > exec_at + exec_time) {
+      estimated_time = end_load_time - exec_at;
+    }
+    else {
+      estimated_time = exec_time;
+    }
+
+    auto i_cb = [&mutex = tracker_mutex, &queue = completion_queue_](
+        int action_id, uint64_t end_time, int model_id) {
+      std::lock_guard<std::mutex> guard(mutex);
+      queue.push(std::make_shared<InferCompletion>(action_id, end_time, model_id));
+    };
+
+    // FIXME: We think about how to check for the cold start.
+    bool is_cold = false;
+    InferAction action(action_seed_id, model_id, is_cold, tasks, i_cb);
+
+    exec.add_work(action_seed_id, estimated_time);
+
+    action_seed_id++;
+
+    model_ref_cnts[model_id]++;
+    // Track the batch size for dynamic adjustment to the optimal point used
+    // in reclaiming memory
+    window_bufs[model_id].update(batch_size);
+
+    worker_->infer(action);
+  }
+  else {
+    // Requests violoting the deadline are handled in
+    // handle_timout().
+    timeouts_.push(task);
+    requests_.erase(requests_.begin());
+  }
+}
 void Scheduler::handle_timeouts() {
   InferTask timeout_task;
   while (!timeouts_.empty()) {
@@ -164,7 +255,37 @@ void Scheduler::handle_timeouts() {
   }
 }
 
-deepplan::Model* Scheduler::find_model(int model_id, bool* is_cold) {
+void Scheduler::reclaim_gpu_memory(const size_t required_memory) {
+  uint64_t mem_size = mem.get_mem();
+  uint64_t reclaimed_size = 0;
+  std::vector<ReclaimingOutput> outputs;
+  while ((mem_size + required_memory - reclaimed_size)
+      >= capacity_) {
+    auto output = preempt_model();
+
+    reclaimed_size += output.size;
+
+    outputs.push_back(std::move(output));
+  }
+
+  if (!outputs.empty()) {
+    auto r_cb = [&mutex = tracker_mutex, &queue = completion_queue_](
+        int action_id, uint64_t end_time, uint64_t end_size) {
+      std::lock_guard<std::mutex> guard(mutex);
+      queue.push(
+        std::make_shared<ReclaimCompletion>(action_id, end_time, end_size));
+    };
+
+    mem.reclaim_mem(action_seed_id, -1, reclaimed_size);
+
+    ReclaimAction action(action_seed_id, outputs, r_cb);
+    worker_->reclaim(action);
+
+    action_seed_id++;
+  }
+}
+
+deepplan::Model* Scheduler::find_model(int model_id) {
   deepplan::Model* model = nullptr;
 
   if (running_models->exist(model_id)) {
@@ -191,16 +312,12 @@ deepplan::Model* Scheduler::find_model(int model_id, bool* is_cold) {
       cfr->erase(model_id);
       found = true;
     }
-
-    if (!found) {
-      *is_cold = true;
-    }
   }
 
   return model;
 }
 
-ReclaimingOutput Scheduler::preempt_models() {
+ReclaimingOutput Scheduler::preempt_model() {
   ReclaimingOutput output;
 
   switch (r_policy_) {
@@ -397,6 +514,7 @@ void Scheduler::clear_models() {
     model_pool->get_model(model_id)->clear();
   }
   req_scoreboard->clear();
+  model_ref_cnts.clear();
   mem.clear();
 }
 
@@ -424,9 +542,10 @@ void Scheduler::sync_setup() {
 
   int num_models = model_pool->get_num_models();
   req_scoreboard->resize(num_models);
+  model_ref_cnts.resize(num_models, 0);
   window_bufs.resize(num_models);
   for (auto& buf : window_bufs) {
-    buf.resize(10); // default size of window trakcing the batch size is 10
+    buf.resize(10); // default size of window tracking the batch size is 10
   }
 
   std::vector<ModelInstance*> model_instances;

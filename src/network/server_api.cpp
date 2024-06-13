@@ -50,6 +50,7 @@ void msg_upload_model_req_tx::set(serverapi::UploadModelRequest& request) {
   msg.set_engine_type(request.engine_type);
   msg.set_r_policy(request.r_policy);
   msg.set_mp_size(request.mp_size);
+  msg.set_disable_prefetch(request.disable_prefetch);
 }
 
 void msg_upload_model_req_rx::get(serverapi::UploadModelRequest& request) {
@@ -59,6 +60,7 @@ void msg_upload_model_req_rx::get(serverapi::UploadModelRequest& request) {
   request.engine_type = msg.engine_type();
   request.r_policy = msg.r_policy();
   request.mp_size = msg.mp_size();
+  request.disable_prefetch = msg.disable_prefetch();
 }
 
 void msg_upload_model_rsp_tx::set(serverapi::UploadModelResponse& response) {

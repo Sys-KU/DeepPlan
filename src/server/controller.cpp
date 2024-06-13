@@ -63,11 +63,13 @@ void Controller::run() {
         int n_models = upload_model->n_models;
         EngineType engine_type = static_cast<EngineType>(upload_model->engine_type);
         ReclaimPolicy r_policy = static_cast<ReclaimPolicy>(upload_model->r_policy);
+        bool disable_prefetch = static_cast<bool>(upload_model->disable_prefetch);
         int mp_size = upload_model->mp_size;
 
         auto response = new serverapi::UploadModelResponse();
 
-        setup_models(model_names, n_models, engine_type, r_policy, mp_size);
+        setup_models(model_names, n_models, engine_type, r_policy, mp_size,
+                     disable_prefetch);
 
         response->req_id = upload_model->req_id;
         message.srv_session->send_response(response);
@@ -89,11 +91,30 @@ void Controller::setup_models(std::vector<std::string> model_names,
                               int n_models,
                               EngineType engine_type,
                               ReclaimPolicy r_policy,
-                              int mp_size) {
+                              int mp_size,
+                              bool disable_prefetch) {
   for (int i = 0; i < schedulers.size(); i++) {
     schedulers[i]->clear_models();
     schedulers[i]->set_r_policy(r_policy);
+
+    if (disable_prefetch) {
+      schedulers[i]->allow_prefetch = false;
+      schedulers[i]->schedule_ahead = SCHEDULE_AHEAD_SYNC;
+      schedulers[i]->load_ahead     = LOAD_AHEAD_SYNC;
+    }
+    else {
+      schedulers[i]->allow_prefetch = true;
+      schedulers[i]->schedule_ahead = SCHEDULE_AHEAD_DEFAULT;
+      schedulers[i]->load_ahead     = LOAD_AHEAD_DEFAULT;
+    }
   }
+
+  std::cout << "==============================\n"
+            << "Scheduler configuration\n"
+            << "# GPUs: " << schedulers.size() << "\n"
+            << "Prefetch: " << (disable_prefetch ? "Disable" : "Enable") << "\n"
+            << "Reclaiming policy: " << r_policy << "\n"
+            << "==============================\n";
 
   bool updated = model_manager->setup(model_names, n_models, engine_type, mp_size);
   if (updated) {

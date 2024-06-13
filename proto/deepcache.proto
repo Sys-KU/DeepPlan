@@ -36,6 +36,7 @@ message UploadModelReqProto {
     required uint32 engine_type = 4;
     required uint32 r_policy = 5;
     required uint32 mp_size = 6;
+    required bool disable_prefetch = 7;
 }
 
 message UploadModelRspProto {

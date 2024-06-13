@@ -24,7 +24,8 @@ class Controller {
                     int n_models,
                     EngineType engine_type,
                     ReclaimPolicy r_policy,
-                    int mp_size);
+                    int mp_size,
+                    bool disable_prefetch);
 
  private:
   std::atomic_bool alive;

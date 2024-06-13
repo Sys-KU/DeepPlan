@@ -35,6 +35,7 @@ struct ClientOptions : public Options{
   int slo;
   float alpha;
   bool disable_timeout;
+  bool disable_prefetch;
   std::string dump;
   int n_warmup;
   int n_test;

@@ -15,12 +15,14 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   ReclaimPolicy r_policy = options.r_policy;
   float alpha = options.alpha;
   bool disable_timeout = options.disable_timeout;
+  bool disable_prefetch = options.disable_prefetch;
 
   int n_warmup = options.n_warmup;
   int n_test = rate * 100;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, "127.0.0.1", "4321");
+                                      r_policy, mp_size, disable_prefetch,
+                                      "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();
@@ -64,9 +66,11 @@ void bursty_experiment(ClientOptions options) {
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
   bool disable_timeout = options.disable_timeout;
+  bool disable_prefetch = options.disable_prefetch;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, "127.0.0.1", "4321");
+                                      r_policy, mp_size, disable_prefetch,
+                                      "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();
@@ -103,9 +107,11 @@ void azure_experiment(ClientOptions options) {
   EngineType engine_type = options.engine_type;
   ReclaimPolicy r_policy = options.r_policy;
   bool disable_timeout = options.disable_timeout;
+  bool disable_prefetch = options.disable_prefetch;
 
   auto model_loader = new ModelLoader(model_names, concurrency, engine_type,
-                                      r_policy, mp_size, "127.0.0.1", "4321");
+                                      r_policy, mp_size, disable_prefetch,
+                                      "127.0.0.1", "4321");
 
   std::cout << "Upload Model...\n";
   model_loader->run();

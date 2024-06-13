@@ -41,6 +41,7 @@ struct UploadModelRequest : public Request {
   uint32_t engine_type;
   uint32_t r_policy;
   uint32_t mp_size;
+  bool disable_prefetch;
 };
 
 struct UploadModelResponse : public Response {

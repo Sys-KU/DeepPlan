@@ -25,7 +25,7 @@ struct InferTask {
         cb(cb),
         timeout_cb(timeout_cb) {};
 
-  serverapi::InferenceRequest* request;
+  serverapi::InferenceRequest* request = nullptr;
   std::function<void(serverapi::InferenceResponse*)> cb;
   std::function<void(serverapi::TimeoutResponse*)> timeout_cb;
 
@@ -49,12 +49,13 @@ struct InferAction : public Action {
   InferAction(
     int action_id,
     int model_id,
-    std::vector<int> layers,
+    bool is_cold,
     std::vector<InferTask> tasks,
-    std::function<void(int, uint64_t, uint64_t)> cb)
-    : Action(action_id), model_id(model_id), layers(layers), tasks(tasks), cb(cb) {};
+    std::function<void(int, uint64_t, int)> cb)
+    : Action(action_id), model_id(model_id), is_cold(is_cold), tasks(tasks),
+      cb(cb) {};
 
-  void complete(const uint64_t exec_time, const uint64_t end_size, const bool is_cold) {
+  void complete(const uint64_t exec_time) {
     uint64_t end_time = util::now();
     for (const auto& task : tasks) {
       auto response = new serverapi::InferenceResponse();
@@ -66,12 +67,32 @@ struct InferAction : public Action {
       response->response_time = end_time;
       task.cb(response);
     }
+    cb(action_id, end_time, model_id);
+  }
+
+  int model_id;
+  bool is_cold;
+  std::vector<InferTask> tasks;
+  std::function<void(int, uint64_t, int)> cb;
+};
+
+
+struct LoadAction : public Action {
+  LoadAction() {};
+  LoadAction(
+    int action_id,
+    int model_id,
+    std::vector<int> layers,
+    std::function<void(int, uint64_t, uint64_t)> cb)
+    : Action(action_id), model_id(model_id), layers(layers), cb(cb) {};
+
+  void complete(const uint64_t end_size) {
+    uint64_t end_time = util::now();
     cb(action_id, end_time, end_size);
   }
 
   int model_id;
   std::vector<int> layers;
-  std::vector<InferTask> tasks;
   std::function<void(int, uint64_t, uint64_t)> cb;
 };
 
@@ -81,15 +102,16 @@ struct ReclaimAction : public Action {
   ReclaimAction(
     int action_id,
     std::vector<ReclaimingOutput> outputs,
-    std::function<void(int, uint64_t)> cb)
+    std::function<void(int, uint64_t, uint64_t)> cb)
     : Action(action_id), outputs(outputs), cb(cb) {};
 
   void complete(const uint64_t end_size) {
-    cb(action_id, end_size);
+    auto end_time = util::now();
+    cb(action_id, end_time, end_size);
   }
 
   std::vector<ReclaimingOutput> outputs;
-  std::function<void(int, uint64_t)> cb;
+  std::function<void(int, uint64_t, uint64_t)> cb;
 };
 
 
@@ -103,9 +125,13 @@ class Worker {
 
   void run();
 
+  void run_loader();
+
   void infer(InferAction infer_action);
 
   void reclaim(ReclaimAction reclaim_action);
+
+  void load(LoadAction load_action);
 
   void clear_models();
 
@@ -121,6 +147,8 @@ class Worker {
   const ServerOptions& options_;
   std::atomic_bool alive;
   std::thread worker_thr;
+  std::thread loader_thr;
   std::vector<ModelInstance*> model_instances;
   tbb::concurrent_queue<std::shared_ptr<Action>> queue_;
+  tbb::concurrent_queue<std::shared_ptr<Action>> load_queue_;
 };

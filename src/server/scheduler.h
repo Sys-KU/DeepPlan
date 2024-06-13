@@ -9,6 +9,53 @@
 #include <set>
 #include <mutex>
 
+#define SCHEDULE_AHEAD_DEFAULT 1e7
+#define SCHEDULE_AHEAD_SYNC 1e6
+#define LOAD_AHEAD_DEFAULT 3e7
+#define LOAD_AHEAD_SYNC 1e6
+
+struct Completion {
+  Completion() {};
+  Completion(int action_id, uint64_t end_time)
+    : action_id(action_id), end_time(end_time) {};
+
+  virtual ~Completion() {};
+
+  int action_id;
+  uint64_t end_time;
+};
+
+
+struct InferCompletion : public Completion {
+  InferCompletion() {};
+  InferCompletion(int action_id, uint64_t end_time, int model_id)
+    : Completion(action_id, end_time), model_id(model_id) {};
+
+  int model_id;
+};
+
+struct LoadCompletion : public Completion {
+  LoadCompletion() {};
+  LoadCompletion(
+    int action_id,
+    uint64_t end_time,
+    uint64_t end_size)
+    : Completion(action_id, end_time), end_size(end_size) {};
+
+  uint64_t end_size;
+};
+
+struct ReclaimCompletion : public Completion {
+  ReclaimCompletion() {};
+  ReclaimCompletion(
+    int action_id,
+    uint64_t end_time,
+    uint64_t end_size)
+    : Completion(action_id, end_time), end_size(end_size) {};
+
+  uint64_t end_size;
+};
+
 
 class CFR {
  public:
@@ -77,18 +124,20 @@ class WorkerTracker {
 
   uint64_t total_outstanding_time = 0UL;
   uint64_t work_begin = 0UL;
-  std::mutex exec_mutex;
 
  public:
   WorkerTracker() {};
 
-  uint64_t available() {
-    std::lock_guard<std::mutex> guard(exec_mutex);
-    return std::max(work_begin + total_outstanding_time, util::now());
+  uint64_t available(const uint64_t now) {
+    if ((outstandings.size() > 0) &&
+        (work_begin + outstandings.front().exec_time < now)) {
+      // Outstanding work has mysteriously not completed
+      work_begin = now - outstandings.front().exec_time;
+    }
+    return std::max(work_begin + total_outstanding_time, now);
   }
 
   void update(int id, uint64_t end_time) {
-    std::lock_guard<std::mutex> guard(exec_mutex);
     if (outstandings.front().id == id) {
       auto work = outstandings.front();
       total_outstanding_time -= work.exec_time;
@@ -108,7 +157,6 @@ class WorkerTracker {
   }
 
   void add_work(int id, uint64_t exec_time) {
-    std::lock_guard<std::mutex> guard(exec_mutex);
     if (outstandings.empty()) {
       work_begin = std::max(work_begin, util::now());
     }
@@ -119,26 +167,55 @@ class WorkerTracker {
 
 
 class MemoryTracker {
-  struct Memory { int id; int64_t size; };
+  struct Memory { int id; int model_id; uint64_t load_time; int64_t size;};
   std::deque<Memory> mem_requests;
 
-  int64_t total_mem_req_size = 0UL;
+  uint64_t total_loading_time = 0UL;
+  int64_t total_mem_size = 0UL;
+  uint64_t load_begin = 0UL;
   int64_t mem_begin = 0UL;
-  std::mutex mem_mutex;
 
  public:
   MemoryTracker() {};
 
-  uint64_t get_mem() {
-    std::lock_guard guard(mem_mutex);
-    return mem_begin + total_mem_req_size;
+  uint64_t available(const uint64_t now) {
+    if ((mem_requests.size() > 0) &&
+        (load_begin + mem_requests.front().load_time < now)) {
+      // Outstanding work has mysteriously not completed
+      load_begin = now - mem_requests.front().load_time;
+    }
+    return std::max(load_begin + total_loading_time, now);
   }
 
-  void update(int id, uint64_t end_mem) {
-    std::lock_guard guard(mem_mutex);
+  uint64_t get_mem() {
+    return mem_begin + total_mem_size;
+  }
+
+  uint64_t end_time(int model_id) {
+    auto it = mem_requests.begin();
+    uint64_t end_time = load_begin;
+    bool found = false;
+    for (it; it != mem_requests.end(); it++) {
+      end_time += it->load_time;
+      if (it->model_id == model_id) {
+        found = true;
+        break;
+      }
+    }
+
+    if (!found) {
+      end_time = 0;
+    }
+
+    return end_time;
+  }
+
+  void update(int id, uint64_t end_time, uint64_t end_mem) {
     if (mem_requests.front().id == id) {
       auto request = mem_requests.front();
-      total_mem_req_size -= request.size;
+      total_loading_time -= request.load_time;
+      total_mem_size -= request.size;
+      load_begin = end_time;
       mem_begin = end_mem;
       mem_requests.pop_front();
     }
@@ -146,28 +223,32 @@ class MemoryTracker {
       auto it = mem_requests.begin();
       for (it; it != mem_requests.end(); it++) {
         if (it->id == id) {
-          total_mem_req_size -= it->size;
+          total_loading_time -= it->load_time;
+          total_mem_size -= it->size;
+          load_begin += it->load_time;
           mem_begin += it->size;
           mem_requests.erase(it);
+          break;
         }
       }
     }
   }
 
-  void load_mem(int id, uint64_t size) {
-    std::lock_guard guard(mem_mutex);
-    total_mem_req_size += size;
-    mem_requests.push_back({id, static_cast<int64_t>(size)});
+  void load_mem(int id, int model_id, uint64_t load_time, uint64_t size) {
+    if (mem_requests.empty()) {
+      load_begin = std::max(load_begin, util::now());
+    }
+    mem_requests.push_back({id, model_id, load_time, static_cast<int64_t>(size)});
+    total_loading_time += load_time;
+    total_mem_size += size;
   }
 
-  void reclaim_mem(int id, uint64_t size) {
-    std::lock_guard guard(mem_mutex);
-    total_mem_req_size -= size;
-    mem_requests.push_back({id, static_cast<int64_t>(-size)});
+  void reclaim_mem(int id, int model_id, uint64_t size) {
+    total_mem_size -= size;
+    mem_requests.push_back({id, model_id, 0UL, static_cast<int64_t>(-size)});
   }
 
   void clear() {
-    std::lock_guard guard(mem_mutex);
     mem_begin = 0UL;
   }
 };
@@ -185,11 +266,17 @@ class Scheduler {
 
   void handle_requests();
 
+  void handle_load(const uint64_t now);
+
+  void handle_exec(const uint64_t now);
+
   void handle_timeouts();
 
-  deepplan::Model* find_model(int model_id, bool* is_cold);
+  void reclaim_gpu_memory(const size_t required_memory);
 
-  ReclaimingOutput preempt_models();
+  deepplan::Model* find_model(int model_id);
+
+  ReclaimingOutput preempt_model();
 
   void clear_models();
 
@@ -205,6 +292,11 @@ class Scheduler {
 
   ModelPool* model_pool;
 
+  // How far ahead, in nanoseconds, should the scheduler schedule or load.
+  uint64_t schedule_ahead = SCHEDULE_AHEAD_DEFAULT;
+  uint64_t load_ahead = LOAD_AHEAD_DEFAULT;
+  bool allow_prefetch = true;
+
  private:
   Worker* worker_;
 
@@ -216,13 +308,13 @@ class Scheduler {
 
   std::queue<InferTask> timeouts_;
 
+  std::mutex tracker_mutex;
+
+  std::queue<std::shared_ptr<Completion>> completion_queue_;
+
   const ServerOptions& options_;
 
   std::atomic_int action_seed_id = 0;
-
-  // How far ahead, in nanoseconds, should the scheduler schedule.
-  // Default is 10ms.
-  uint64_t schedule_ahead = 1e7;
 
   size_t capacity_;
 
@@ -230,6 +322,7 @@ class Scheduler {
 
   ReclaimPolicy r_policy_;
   util::LRUCache<int, deepplan::Model*>* running_models;
+  std::vector<int> model_ref_cnts;
   RequestScoreboard* req_scoreboard = nullptr;
   std::vector<util::WindowBuf<int>> window_bufs;
   CFR* cfr;

@@ -29,7 +29,7 @@ Client::~Client() {
 
 serverapi::UploadModelResponse* Client::upload_model(
     std::vector<std::string> model_names, int n_models, EngineType engine_type,
-    ReclaimPolicy r_policy, int mp_size) {
+    ReclaimPolicy r_policy, int mp_size, bool disable_prefetch) {
   serverapi::UploadModelRequest request;
 
   request.model_names = model_names;
@@ -37,6 +37,7 @@ serverapi::UploadModelResponse* Client::upload_model(
   request.engine_type = engine_type;
   request.r_policy = r_policy;
   request.mp_size = mp_size;
+  request.disable_prefetch = disable_prefetch;
 
   auto onSuccess = [this](serverapi::Response* rsp) {
     std::cout << "Success Upload\n";

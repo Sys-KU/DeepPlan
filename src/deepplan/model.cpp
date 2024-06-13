@@ -67,10 +67,17 @@ void ModelInstance::reclaim_layers(std::vector<int> reclaiming_layers) {
   }
 }
 
-void ModelInstance::load_layers(std::vector<int> load_layers, bool non_blocking) {
-  for (int i : load_layers) {
-    layers[i].to(target_device, non_blocking);
+void ModelInstance::load_layers(std::vector<int> load_layer_idxs) {
+  std::unordered_map<int, std::vector<ScriptModule>> device_map;
+  std::vector<ScriptModule> load_layers;
+
+  // TODO(jinu): Supprot the multi-device mapping
+  for (auto i : load_layer_idxs) {
+    load_layers.push_back(this->layers[i]);
   }
+  device_map[target_device.index()] = load_layers;
+
+  LoadLayers(target_device, device_map);
 }
 
 void ModelInstance::to(at::Device device, bool non_blocking) {

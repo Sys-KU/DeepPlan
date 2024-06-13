@@ -10,6 +10,9 @@
 #include <torch/script.h>
 #include <torch/csrc/jit/runtime/graph_executor.h>
 
+#include <future>
+
+
 namespace deepplan {
 
 class PCIeThread;
@@ -140,6 +143,21 @@ class PCIeThread : public LoadThread {
       }
     }
   }
+
+  void transfer_modules_block(
+      std::vector<ScriptModule>& modules, int target_device, std::promise<void> barrier) {
+    at::Device device(at::kCUDA, device_);
+    at::cuda::CUDAStreamGuard guard(stream);
+    c10::cuda::CUDAGuard device_guard(device);
+
+     for (auto& module : modules) {
+        module.to_and_record(device, true);
+     }
+
+     cudaStreamSynchronize(stream);
+
+     barrier.set_value();
+  }
 };
 
 void Init(void) {
@@ -179,12 +197,13 @@ class PipelineEngine : public Engine {
     assert(n_device > target_device);
 
     for (auto [device, modules] : device_map) {
-      g_pcie_thrs[device]->transfer_modules(modules, device);
+      g_pcie_thrs[device]->transfer_modules(modules, target_device);
     }
 
     {
       at::cuda::CUDAStreamGuard stream_guard(g_exec_streams[target_device]);
       outputs = model.forward(x);
+      cudaStreamSynchronize(g_exec_streams[target_device]);
     }
 
     return outputs;
@@ -205,5 +224,16 @@ torch::jit::IValue RunEngine(
   return outputs;
 }
 
+void LoadLayers(
+    at::Device target_device,
+    std::unordered_map<int, std::vector<ScriptModule>>& device_map) {
+  for (auto [device, modules] : device_map) {
+    std::promise<void> barrier;
+    std::future<void> barrier_future = barrier.get_future();
+    g_pcie_thrs[device]->transfer_modules_block(
+        modules, target_device.index(), std::move(barrier));
+    barrier_future.wait();
+  }
+}
 
 }
