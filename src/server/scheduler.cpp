@@ -149,6 +149,9 @@ void Scheduler::handle_exec(const uint64_t now) {
     auto model = model_pool->get_model(model_id);
     auto engine_type = model->engine_type;
     if (engine_type >= EngineType::PIPESWITCH) {
+      if (model->uncached_size > 0) {
+        return;
+      }
       task = head_task;
     }
     else {
