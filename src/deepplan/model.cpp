@@ -284,14 +284,14 @@ std::pair<size_t, std::vector<int>> Model::load_layers(int n_layers, bool non_bl
 }
 
 uint64_t Model::get_load_time() {
-  double load_time_ms = 0.f;
+  double load_time = 0.f;
   for (auto load_state : load_state_maps) {
     if (load_state.device == Device::CPU) {
-      load_time_ms += load_state.load_time;
+      load_time += load_state.load_time;
     }
   }
 
-  uint64_t load_time_ns = static_cast<uint64_t>(load_time_ms);
+  uint64_t load_time_ns = static_cast<uint64_t>(load_time);
 
   return load_time_ns;
 }
