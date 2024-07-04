@@ -113,8 +113,8 @@ void Scheduler::handle_load(const uint64_t now) {
 
   size_t uncached_size = model->uncached_size;
   if (uncached_size > 0) {
-    auto [loaded_size, load_layers] = model->load_layers();
     uint64_t estimated_load_time = model->get_load_time() + lag;
+    auto [loaded_size, load_layers] = model->load_layers();
 
     reclaim_gpu_memory(uncached_size);
 
@@ -175,7 +175,7 @@ void Scheduler::handle_exec(const uint64_t now) {
         auto end_load_time = mem.end_time(model_id);
 
         // If the pipeline can not hide the model, we schedule other models.
-        if ((exec_at + exec_time) < end_load_time) {
+        if (model->uncached_size > 0 || (exec_at + exec_time) < end_load_time) {
           continue;
         }
 
@@ -578,6 +578,10 @@ void Scheduler::sync_setup() {
   window_bufs.resize(num_models);
   for (auto& buf : window_bufs) {
     buf.resize(10); // default size of window tracking the batch size is 10
+    // Clear dumpy data
+    for (int i = 0; i < 10; i++) {
+      buf.update(1);
+    }
   }
 
   std::vector<ModelInstance*> model_instances;
