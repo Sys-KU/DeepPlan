@@ -293,8 +293,8 @@ class Scheduler {
   ModelPool* model_pool;
 
   // How far ahead, in nanoseconds, should the scheduler schedule or load.
-  uint64_t schedule_ahead = SCHEDULE_AHEAD_DEFAULT;
-  uint64_t load_ahead = LOAD_AHEAD_DEFAULT;
+  uint64_t schedule_ahead;
+  uint64_t load_ahead;
   bool allow_prefetch = true;
 
  private:

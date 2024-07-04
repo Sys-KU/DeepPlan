@@ -143,22 +143,54 @@ void Scheduler::handle_exec(const uint64_t now) {
     return;
   }
 
-  for (auto it = requests_.begin(); it != requests_.end(); it++) {
-    int model_id = it->request->model_id;
+  if (!allow_prefetch) {
+    auto head_task = *requests_.begin();
+    int model_id = head_task.request->model_id;
     auto model = model_pool->get_model(model_id);
-    if (model->engine_type >= EngineType::PIPESWITCH) {
-      task = *it;
-      break;
+    auto engine_type = model->engine_type;
+    if (engine_type >= EngineType::PIPESWITCH) {
+      task = head_task;
     }
-    else if (model->engine_type <= EngineType::ON_DEMAND) {
+    else {
       // Skip scheduling the models that are not loaded.
-      if (model->uncached_size > 0) {
-        continue;
+      if (model->uncached_size > 0 || exec_at < mem.end_time(model_id)) {
+        return;
       }
-      if (mem.end_time(model_id) > 0) {
-        continue;
+      task = head_task;
+    }
+  }
+  else {
+    for (auto it = requests_.begin(); it != requests_.end(); it++) {
+      int model_id = it->request->model_id;
+      auto model = model_pool->get_model(model_id);
+      auto engine_type = model->engine_type;
+      if (engine_type >= EngineType::PIPESWITCH) {
+        auto batch_window = window_bufs[model_id].get_buf();
+        assert(!batch_window.empty());
+
+        auto min_batch_size = (*std::min_element(batch_window.begin(),
+                                                 batch_window.end()));
+        auto exec_time = model_pool->get_model_exec_time(model_id,
+                                                         min_batch_size);
+        auto end_load_time = mem.end_time(model_id);
+
+        // If the pipeline can not hide the model, we schedule other models.
+        if ((exec_at + exec_time) < end_load_time) {
+          continue;
+        }
+
+        task = *it;
+        break;
       }
-      task = *it;
+      else {
+        // Skip scheduling the models that are not loaded.
+        if (model->uncached_size > 0 || exec_at < mem.end_time(model_id)) {
+          continue;
+        }
+
+        task = *it;
+        break;
+      }
     }
   }
 
