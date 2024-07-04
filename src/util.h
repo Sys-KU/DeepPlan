@@ -238,6 +238,9 @@ class WindowBuf {
 
   void resize(int window_size) {
     clear();
+    for (int i = 0; i < window_size; i++) {
+      buf_.push_back(1);
+    }
     window_size_ = window_size;
   }
 

@@ -197,7 +197,7 @@ class MemoryTracker {
     bool found = false;
     for (it; it != mem_requests.end(); it++) {
       end_time += it->load_time;
-      if (it->model_id == model_id) {
+      if (it->model_id == model_id && it->size > 0) {
         found = true;
         break;
       }
@@ -244,6 +244,9 @@ class MemoryTracker {
   }
 
   void reclaim_mem(int id, int model_id, uint64_t size) {
+    if (mem_requests.empty()) {
+      load_begin = std::max(load_begin, util::now());
+    }
     total_mem_size -= size;
     mem_requests.push_back({id, model_id, 0UL, static_cast<int64_t>(-size)});
   }
