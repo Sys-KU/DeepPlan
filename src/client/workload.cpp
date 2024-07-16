@@ -186,9 +186,9 @@ void ModelLoader::run() {
 
   inputs.resize(n_models);
 
-  int n_models_per_type = n_models / model_names.size();
   for (int i = 0; i < n_models; i++) {
-    input_generator.generate_input(model_names[i/n_models_per_type], 1, &inputs[i]);
+    auto model_name = model_names[i % model_names.size()];
+    input_generator.generate_input(model_name, 1, &inputs[i]);
   }
 
   client.upload_model(
