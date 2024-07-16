@@ -7,6 +7,7 @@ from typing import Union, List
 class ModelType(Enum):
     CNN = 0
     TRANSFORMER = 1
+    SSD = 2
 
 class ModelConfig:
     def __init__(
@@ -24,6 +25,8 @@ class ModelConfig:
             self.model_type = ModelType.CNN
         elif model_type in ("Transformer", ModelType.TRANSFORMER):
             self.model_type = ModelType.TRANSFORMER
+        elif model_type in ("SSD", ModelType.SSD):
+            self.model_type = ModelType.SSD
 
         self.input_shape = input_shape
         self.generate_input_func = generate_input_func
@@ -42,6 +45,9 @@ class ModelConfig:
         elif self.model_type == ModelType.TRANSFORMER:
             model = AutoModel.from_pretrained(self.model_name, torchscript=True)
             model.num_layers = self.num_layers
+        elif self.model_type == ModelType.SSD:
+            model = getattr(vision, self.model_name)()
+
         model.is_parallel = False
 
         return model
@@ -80,6 +86,7 @@ model_list = {
         't5_large': ModelConfig('t5-large', ModelType.TRANSFORMER, [300], generate_T5_input, max_num=32129, num_layers=24),
         'roberta_base': ModelConfig('roberta-base', ModelType.TRANSFORMER, [384], generate_TRS_input, max_num=50265, num_layers=12),
         'roberta_large': ModelConfig('roberta-large', ModelType.TRANSFORMER, [384], generate_TRS_input, max_num=50265, num_layers=24),
+        'ssd': ModelConfig('SSD300', ModelType.SSD, [3, 1200, 1200], generate_CNN_input)
         }
 
 def import_model(model_name):
