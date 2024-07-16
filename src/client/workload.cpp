@@ -131,9 +131,11 @@ WorkloadResult Workload::result() {
   WorkloadResult result;
 
   int goodput_cnt = 0 ;
+  double infer_time = 0;
   std::vector<double> latencies;
   for (auto& res_result : res_results) {
     latencies.push_back(res_result.latency);
+    infer_time += res_result.infer_time;
     goodput_cnt += res_result.good;
   }
 
@@ -143,6 +145,7 @@ WorkloadResult Workload::result() {
   int index_99 = latencies.size() * 0.99 - 1;
 
   result.throughput = n_requests / (elapsed_time / 1e3);  // requests per sec
+  result.avg_infer_time = infer_time / 1e6 / (n_requests); // ns -> ms
   result.latency_50 = latencies[index_50];
   result.latency_99 = latencies[index_99];
   result.cold_rate = (double)cold_start_cnt / n_requests * 100;

@@ -126,6 +126,7 @@ void Scheduler::handle_load(const uint64_t now) {
     mem.load_mem(action_seed_id, model_id, estimated_load_time, loaded_size);
     LoadAction action(action_seed_id, model_id, load_layers, l_cb);
     worker_->load(action);
+    cold_model_ids.insert(model_id);
 
     action_seed_id++;
   }
@@ -255,8 +256,11 @@ void Scheduler::handle_exec(const uint64_t now) {
       queue.push(std::make_shared<InferCompletion>(action_id, end_time, model_id));
     };
 
-    // FIXME: We think about how to check for the cold start.
     bool is_cold = false;
+    if (auto search = cold_model_ids.find(model_id); search != cold_model_ids.end()) {
+        cold_model_ids.erase(search);
+        is_cold = true;
+    }
     InferAction action(action_seed_id, model_id, is_cold, tasks, i_cb);
 
     exec.add_work(action_seed_id, estimated_time);

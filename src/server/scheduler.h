@@ -330,4 +330,5 @@ class Scheduler {
   std::vector<util::WindowBuf<int>> window_bufs;
   CFR* cfr;
   std::list<util::LRUCache<int, deepplan::Model*>*> partial_models_list;
+  std::set<int> cold_model_ids;
 };

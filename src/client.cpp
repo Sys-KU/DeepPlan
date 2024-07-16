@@ -45,6 +45,7 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   auto result = workload->result();
 
   std::cout << "=======================================\n";
+  std::cout << "Average Inference Time: " << result.avg_infer_time << " ms\n";
   std::cout << "Throughput: " << result.throughput << " r/s\n";
   std::cout << "50% Latency: " << result.latency_50 << " ms\n";
   std::cout << "99% Latency: " << result.latency_99 << " ms\n";
