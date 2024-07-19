@@ -158,7 +158,11 @@ void Model::init() {
   }
 
   // Set device_map
-  this->model_size = std::accumulate(layer_sizes.begin(), layer_sizes.end(), 0);
+  size_t model_size = 0;
+  for (auto load_state: load_state_maps) {
+    model_size += load_state.size;
+  }
+  this->model_size = model_size;
   {
     int n_device = devices.size();
     size_t block_size = model_size / n_device;
