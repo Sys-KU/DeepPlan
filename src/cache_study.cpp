@@ -62,7 +62,7 @@ void benchmark(CacheStudyOptions options) {
   util::progressbar progressbar;
 
   if (verbose_flag) {
-    std::cout << "Number of cached layers, Load Size (MB), Inference Latency (ms), Load Latency (ms)\n";
+    std::cout << "Number of cached layers, Load size (MB), Inference latency (ms), Load latency (ms)\n";
   }
   else {
     progressbar = util::progressbar(model->n_layers + 1);
@@ -76,7 +76,6 @@ void benchmark(CacheStudyOptions options) {
       auto pre = model->load_layers(i);
       model->model_instance->load_layers(pre.second);
 
-      // TODO: remove recalculatation
       auto post = model->load_layers();
       load_size = post.first;
 
@@ -93,16 +92,19 @@ void benchmark(CacheStudyOptions options) {
 
       if (verbose_flag) {
         model->clear();
-        model->load_layers(i);
+        auto pre = model->load_layers(i);
+        model->model_instance->load_layers(pre.second);
 
-        pre = model->load_layers(i);
+        auto post = model->load_layers();
 
         t1 = util::now();
 
-        model->model_instance->load_layers(pre.second);
+        model->model_instance->load_layers(post.second);
 
-        torch::cuda::synchronize(target_device.index());
         t2 = util::now();
+
+        auto outputs = model->forward(inputs);
+        torch::cuda::synchronize(target_device.index());
 
         if (step >= num_warmup) {
           total_load_ms += ((t2-t1) / 1e6);
