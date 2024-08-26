@@ -1,6 +1,11 @@
 #include <util.h>
 #include <sys/ioctl.h>
 #include <sstream>
+#include <string>
+#include <numa.h>
+#include <numaif.h>
+
+#include <cuda_runtime.h>
 
 namespace util {
 
@@ -261,6 +266,89 @@ void progressbar::update(int n) {
   if (count >= n_cycles) {
       std::cout << "\n";
   }
+}
+
+static std::string get_pcie_bus_id(int device_id) {
+  char pci_bus_id[16];
+  cudaError_t err = cudaDeviceGetPCIBusId(pci_bus_id, 16, device_id);
+  if (err != cudaSuccess) {
+    std::cerr << "Failed to get PCI bus ID for device " << device_id
+              << ": " << cudaGetErrorString(err) << std::endl;
+    return "";
+  }
+
+  return std::string(pci_bus_id);
+}
+
+static int get_numa_node_attached_deivce(int device_id) {
+  std::string pci_bus_id = get_pcie_bus_id(device_id);
+  std::for_each(pci_bus_id.begin(), pci_bus_id.end(),
+                [](auto& c) { c = std::tolower(c); });
+
+  std::string path = "/sys/bus/pci/devices/" + pci_bus_id + "/numa_node";
+  std::ifstream numa_file(path);
+  if (!numa_file.is_open()) {
+    std::cerr << "Failed to open NUMA node file for PCI device " << pci_bus_id << std::endl;
+    return -1;
+  }
+
+  int numa_node = -1;
+  numa_file >> numa_node;
+  numa_file.close();
+
+  return numa_node;
+}
+
+void bind_thread_to_numa_node(std::thread &t, int device) {
+  int numa_node = get_numa_node_attached_deivce(device);
+  if (numa_node == -1 || numa_available() < 0) {
+		std::cerr << "NUMA is not available on this system." << std::endl;
+    return;
+  }
+
+	pthread_t handle = t.native_handle();
+
+	cpu_set_t cpuset;
+	CPU_ZERO(&cpuset);
+
+	struct bitmask *cpu_bitmask = numa_allocate_cpumask();
+	numa_node_to_cpus(numa_node, cpu_bitmask);
+
+	for (int i = 0; i < CPU_SETSIZE; i++) {
+		if (numa_bitmask_isbitset(cpu_bitmask, i)) {
+			CPU_SET(i, &cpuset);
+		}
+	}
+
+	int ret = pthread_setaffinity_np(handle, sizeof(cpu_set_t), &cpuset);
+	if (ret != 0) {
+		std::cerr << "Error setting thread affinity: " << ret << std::endl;
+	}
+
+	numa_free_cpumask(cpu_bitmask);
+}
+
+numa_mem_guard::numa_mem_guard(int device) {
+  int numa_node = get_numa_node_attached_deivce(device);
+  if (numa_node == -1 || numa_available() < 0) {
+		std::cerr << "NUMA is not available on this system." << std::endl;
+    return;
+  }
+
+	struct bitmask *nodemask = numa_allocate_nodemask();
+	numa_bitmask_setbit(nodemask, numa_node);
+	numa_set_membind(nodemask);
+
+	numa_free_nodemask(nodemask);
+}
+
+numa_mem_guard::~numa_mem_guard() {
+  if (numa_available() == -1) {
+    fprintf(stderr, "NUMA is not available on this system.\n");
+    return;
+  }
+
+  numa_set_localalloc();
 }
 
 }

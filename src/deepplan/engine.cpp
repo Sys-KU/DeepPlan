@@ -54,7 +54,7 @@ class LoadThread {
       queue.push(std::make_shared<Task>(modules, target_device));
   }
 
-  virtual void init() = 0;
+  virtual void init(int device) = 0;
 
   virtual void Loop() = 0;
 
@@ -76,10 +76,11 @@ class LoadThread {
 class NVLinkThread : public LoadThread {
  public:
   NVLinkThread(int device)
-    : LoadThread(device) { init(); };
+    : LoadThread(device) { init(device); };
 
-  void init() {
+  void init(int device) {
     thr = std::thread(std::bind(&NVLinkThread::Loop, this));
+    util::bind_thread_to_numa_node(thr, device);
   }
 
   void Loop() {
@@ -113,10 +114,11 @@ class NVLinkThread : public LoadThread {
 class PCIeThread : public LoadThread {
  public:
   PCIeThread(int device)
-   : LoadThread(device) { init(); };
+   : LoadThread(device) { init(device); };
 
-  void init() {
+  void init(int device) {
     thr = std::thread(std::bind(&PCIeThread::Loop, this));
+    util::bind_thread_to_numa_node(thr, device);
   }
 
   void Loop() {

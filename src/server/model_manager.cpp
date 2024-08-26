@@ -1,6 +1,7 @@
 #include <c10/cuda/CUDACachingAllocator.h>
 #include <server/model_manager.h>
 #include <deepplan/model.h>
+#include <util.h>
 
 uint64_t ModelPool::get_model_exec_time(int model_id, int batch_size) {
   auto model = dynamic_cast<deepplan::Model*>(get_model(model_id));
@@ -61,11 +62,13 @@ bool ModelManager::setup(std::vector<std::string> model_names, int num_models,
         (engine_type_ == engine_type) &&
         (mp_size_ == mp_size)) {
       int num_add_models = std::max(num_models - num_models_, 0);
-      auto progressbar = util::progressbar(num_add_models, "Models setup");
       if (num_add_models > 0) {
-        int num_models_per_pool = num_add_models / num_pools;
+        auto progressbar = util::progressbar(num_add_models, "Models setup");
+
+        int start_id = num_models_;
         for (int p = 0; p < model_pools.size(); p++) {
-          for (int i = 0; i < num_models_per_pool; i++) {
+          util::numa_mem_guard numa(p);
+          for (int i = start_id + p; i < num_models; i += model_pools.size()) {
             auto model_name = model_names[i % model_names.size()];
             model_pools[p]->add_model(model_name, engine_type, partitions[p]);
             progressbar.update();
@@ -75,10 +78,10 @@ bool ModelManager::setup(std::vector<std::string> model_names, int num_models,
     }
     else {
       auto progressbar = util::progressbar(num_models, "Models setup");
-      int num_models_per_pool = num_models / num_pools;
+
       for (int p = 0; p < model_pools.size(); p++) {
-        model_pools[p]->reset_models();
-        for (int i = 0; i < num_models_per_pool; i++) {
+        util::numa_mem_guard numa(p);
+        for (int i = p; i < num_models; i += model_pools.size()) {
           auto model_name = model_names[i % model_names.size()];
           model_pools[p]->add_model(model_name, engine_type, partitions[p]);
           progressbar.update();

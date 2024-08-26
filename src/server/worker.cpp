@@ -19,6 +19,9 @@ Worker::Worker(int device, const ServerOptions& options,
       }
       worker_thr = std::thread(std::bind(&Worker::run, this));
       loader_thr = std::thread(std::bind(&Worker::run_loader, this));
+
+      util::bind_thread_to_numa_node(worker_thr, device);
+      util::bind_thread_to_numa_node(loader_thr, device);
     }
 
 Worker::~Worker() {

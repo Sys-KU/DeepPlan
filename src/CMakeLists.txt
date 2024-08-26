@@ -39,6 +39,7 @@ target_link_libraries(deepplan PRIVATE
 	tbb
 	${Boost_LIBRARIES}
 	${TORCH_LIBRARIES}
+    ${NUMA_LIBRARIES}
 )
 
 add_library(network ${NETWORK_SRC})

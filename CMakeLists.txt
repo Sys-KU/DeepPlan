@@ -5,8 +5,11 @@ set(CMAKE_C_STANDARD 11)
 
 project(DeepPlan)
 
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
 find_package(Torch REQUIRED)
 find_package(Boost COMPONENTS system filesystem REQUIRED)
+find_package(Numa REQUIRED)
 
 include_directories(${Boost_INCLUDE_DIR})
 

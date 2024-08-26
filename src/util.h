@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <deepplan.pb.h>
 #include <google/protobuf/text_format.h>
-#include <exception>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -246,5 +245,18 @@ class WindowBuf {
 
   int window_size_;
 };
+
+template<typename T>
+T get_mean_value(std::vector<T> vec) {
+  T total = std::accumulate(vec.begin(), vec.end(), 0.0);
+  return total / vec.size();
+}
+
+struct numa_mem_guard {
+  numa_mem_guard(int device);
+  ~numa_mem_guard();
+};
+
+void bind_thread_to_numa_node(std::thread &t, int device);
 
 } // namespace util

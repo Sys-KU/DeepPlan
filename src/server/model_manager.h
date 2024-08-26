@@ -1,7 +1,6 @@
 #pragma once
 
 #include <deepplan/model.h>
-#include <util.h>
 
 size_t getDeviceActiveMemorySize(int deivce);
 
