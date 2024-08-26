@@ -48,12 +48,14 @@ bool SrvSession::completed_receive(message_connection* conn, message_rx* req) {
     infer->get(*request);
 
     messages_.push({this, request});
+    requests[request->req_id] = request;
   }
   else if (auto upload_model = dynamic_cast<msg_upload_model_req_rx*>(req)) {
     auto request = new serverapi::UploadModelRequest();
     upload_model->get(*request);
 
     messages_.push({this, request});
+    requests[request->req_id] = request;
   }
   else if (auto close = dynamic_cast<msg_close_req_rx*>(req)) {
     auto response = new serverapi::CloseResponse();
@@ -68,8 +70,6 @@ bool SrvSession::completed_receive(message_connection* conn, message_rx* req) {
     throw std::runtime_error("Not found a castable response type.");
   }
 
-  delete req;
-
   return is_continue;
 }
 
@@ -78,18 +78,26 @@ void SrvSession::completed_transmit(message_connection* conn, message_tx* req) {
 
 void SrvSession::send_response(serverapi::Response* response) {
   message_tx* msg_tx;
+  auto req = requests[response->req_id];
 
   if (auto infer = dynamic_cast<serverapi::InferenceResponse*>(response)) {
     auto infer_rsp = new msg_inference_rsp_tx();
 
     infer_rsp->set(*infer);
     msg_tx = infer_rsp;
+
+    auto infer_req = dynamic_cast<serverapi::InferenceRequest*>(req);
+    free(infer_req->input);
+    delete infer_req;
   }
   else if (auto upload_model = dynamic_cast<serverapi::UploadModelResponse*>(response)) {
     auto upload_model_rsp = new msg_upload_model_rsp_tx();
 
     upload_model_rsp->set(*upload_model);
     msg_tx = upload_model_rsp;
+
+    auto upload_req = dynamic_cast<serverapi::UploadModelRequest*>(req);
+    delete upload_req;
   }
   else if (auto close = dynamic_cast<serverapi::CloseResponse*>(response)) {
     auto close_rsp = new msg_close_rsp_tx();
@@ -102,6 +110,10 @@ void SrvSession::send_response(serverapi::Response* response) {
 
     timeout_rsp->set(*timeout);
     msg_tx = timeout_rsp;
+
+    auto timeout_req = dynamic_cast<serverapi::InferenceRequest*>(req);
+    free(timeout_req->input);
+    delete timeout_req;
   }
   else {
     throw std::runtime_error("Not found a castable response type.");

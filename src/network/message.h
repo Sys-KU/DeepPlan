@@ -108,6 +108,9 @@ class msg_protobuf_rx_with_body : public msg_protobuf_rx<TMsgType, TMsg, TRsp> {
   void* body_ = nullptr;
 
  public:
+  ~msg_protobuf_rx_with_body() {
+    free(body_);
+  }
   virtual void set_body_len(size_t body_len) {
     body_len_ = body_len;
     body_ = new uint8_t[body_len];

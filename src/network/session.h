@@ -3,10 +3,8 @@
 #include <network/server_api.h>
 
 #include <atomic>
-#include <thread>
 #include <future>
 
-#include "deepcache.pb.h"
 #include "tbb/concurrent_queue.h"
 
 namespace network {
@@ -50,6 +48,7 @@ class SrvSession : public Session {
 
  private:
   MessageQueue& messages_;
+  std::map<uint64_t, serverapi::Request*> requests;
 };
 
 class ClientSession : public Session {
