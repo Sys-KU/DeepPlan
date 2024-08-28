@@ -281,6 +281,7 @@ void Scheduler::handle_exec(const uint64_t now) {
     requests_.erase(requests_.begin());
   }
 }
+
 void Scheduler::handle_timeouts() {
   InferTask timeout_task;
   while (!timeouts_.empty()) {
