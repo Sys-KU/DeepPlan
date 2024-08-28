@@ -52,16 +52,16 @@ x_value = [i for i in range(1, 181)]
 x_ticks = [30 * i for i in range(0, 7)]
 
 
-label_list = ["PipeSwitch", "DeepPlan (DHA)", "DeepPlan (PT+DHA)"]
+label_list = ["PipeSwitch", "DeepPlan (DHA)", "DeepCache", "All"]
 #color_list = ['#EAECEE', '#AEB6BF', '#85929E', '#5D6D7E', '#34495E', '#273746']
 
 # Prepare these files
-engine_list = ["pipeline.csv", "deepplan.csv", "deepplan+.csv"]
+engine_list = ["pipeline_lru.csv", "deepplan_lru.csv", "pipeline_dynamic.csv", "deepplan_dynamic.csv"]
 
-color_list = ['#AEB6BF', '#5D6D7E', '#273746']
-line_list = ['solid', 'dotted', 'dashdot']
+color_list = ['#AEB6BF', '#5D6D7E', '#34495E', '#273746', '#273746']
+line_list = [':', '-.', '--', '-']
 
-ylim_list = [(5500, 10001), (0, 550), (50, 103), (0, 22.5)]
+ylim_list = [(10500, 17000), (0, 400), (75, 103), (0, 20)]
 
 x_label = "Time (minutes)"
 y_label = ["Offered load\n (req./min.)", "99 % latency\n (ms)", "Goodput\n (%)", "Cold-start\n (%)"]
@@ -79,7 +79,8 @@ MARKER_SIZE = 10
 plt.figure(figsize=SIZE_FIGURE)
 gs = gridspec.GridSpec(nrows=4, # row 몇 개
                        ncols=1, # col 몇 개
-                       height_ratios=[0.8, 1, 0.8, 0.8]
+                       height_ratios=[0.8, 1, 0.8, 0.8],
+					   hspace=0.1,
                       )
 
 li_ax = []
@@ -124,13 +125,13 @@ for i, engine in enumerate(engine_list):
 
             ax.grid(alpha=1, linestyle='--')
 
-plt.legend(labels=label_list, bbox_to_anchor=(0.43, 4.7), ncol=3, loc='center', columnspacing=0.6,
+plt.legend(labels=label_list, bbox_to_anchor=(0.43, 4.8), ncol=4, loc='center', columnspacing=0.6,
            fontsize=FONTSIZE_LEGEND, edgecolor="#FFFFFF")
 
 plt.xlabel(x_label, fontsize=FONTSIZE_XLABEL, labelpad=10)
 
 plt.subplots_adjust(hspace=0.06)
 plt.rcParams["font.family"] = "Helvetica"
-plt.savefig(sys.argv[2], bbox_inches="tight", pad_inches=0.0)
+plt.savefig(sys.argv[2], bbox_inches="tight")
 
 print("Saved graph to {}".format(sys.argv[2]))

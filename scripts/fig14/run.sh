@@ -17,43 +17,44 @@ export PLAN_REPO=${PLAN_REPO}
 script_path=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 build_path="$script_path/../../build"
 
-model_list="gpt2_384 bert_base bert_base bert_base bert_base roberta_base roberta_base roberta_base roberta_base"
-conc=252
-rate=150
+model_list="bert_base bert_base bert_base bert_base \
+            roberta_base roberta_base roberta_base roberta_base \
+            resnet50 resnet50 resnet50 resnet50 \
+            resnet101 resnet101 resnet101 resnet101 \
+            bert_large bert_large bert_large bert_large \
+            roberta_large roberta_large roberta_large roberta_large"
+conc=200
+rate=240
 
-engines=("deepplan+" "deepplan" "pipeline")
+engines=("deepplan" "pipeline")
+r_policies=("dynamic" "lru")
 
 for engine in "${engines[@]}"; do
-	server_cmd="$build_path/server"
+    for r_policy in "${r_policies[@]}"; do
+        server_cmd="$build_path/server -w 0.3"
 
-	echo "Run Server"
-	$server_cmd & 1> /dev/null
+        echo "Run Server"
+        $server_cmd & 1> /dev/null
 
-	echo "Wait 30 seconds for the server to be ready."
-	sleep 30
+        echo "Wait 30 seconds for the server to be ready."
+        sleep 30
 
-	p_option=1
+        _engine=$engine
 
-	_engine=$engine
-	if [ "$engine" = "deepplan+" ]; then
-		_engine="deepplan"
-		p_option=2
-	fi
+        tmp_file="/tmp/deepplan_${engine}_${r_policy}_fig14"
+        printf "" > $tmp_file
 
-	tmp_file="/tmp/deepplan_${engine}_fig14"
-	printf "" > $tmp_file
+        echo "Start Experiment ($engine)"
+        client_cmd="$build_path/client -m $model_list -e $_engine -r $rate -c $conc -w azure --disable_prefetch --disable_timeout --r_policy $r_policy"
+        stdbuf --output=L $client_cmd | tee -a $tmp_file
 
-	echo "Start Experiment ($engine)"
-	client_cmd="$build_path/client -m $model_list -e $_engine -r $rate -c $conc -w azure -p $p_option"
-	stdbuf --output=L $client_cmd | tee -a $tmp_file
+        server_pid=$(ps -ef | grep -v grep | grep "$server_cmd" | awk '{print $2}')
+        kill -s SIGINT $server_pid
 
-	server_pid=$(ps -ef | grep -v grep | grep "$server_cmd" | awk '{print $2}')
-	kill -s SIGINT $server_pid
+        echo "Closing Server"
 
-	echo "Closing Server"
-
-	wait
-
+        wait
+    done
 done
 
 log_path="$script_path/logs"
@@ -82,13 +83,15 @@ log_path=$_log_path
 mkdir -p "$log_path"
 
 for engine in "${engines[@]}"; do
-	tmp_file="/tmp/deepplan_${engine}_fig14"
+    for r_policy in "${r_polices[@]}"; do
+        tmp_file="/tmp/deepplan_${engine}_${r_policy}_fig14"
 
-	output_file="$log_path/${engine}.csv"
+        output_file="$log_path/${engine}_${r_policy}.csv"
 
-	awk '$1 ~ /^[0-9]*,/ { print $3 $4 $5 }' $tmp_file > $output_file
+        awk '$1 ~ /^[0-9]*,/ { print $3 $4 $5 }' $tmp_file > $output_file
 
-	echo "Created '$output_file' log file"
+        echo "Created '$output_file' log file"
+    done
 done
 
 output_file="$log_path/offered_load.csv"
