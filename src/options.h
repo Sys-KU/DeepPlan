@@ -12,6 +12,7 @@ struct Options {
 struct ServerOptions : public Options{
  public:
   float watermark;
+  bool verbose;
 
   void print_usage(char* program_name);
   void parseOptions(int argc, char** argv);

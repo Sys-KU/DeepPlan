@@ -16,6 +16,7 @@ void ServerOptions::parseOptions(int argc, char** argv) {
   struct option long_options[] =
   {
     {"watermark", no_argument,       0, 'w' },
+    {"verbose",   no_argument,       0, 'v' },
     {"help",      no_argument,       0, 'h' },
     {0,           0,                 0,  0  }
   };
@@ -24,14 +25,18 @@ void ServerOptions::parseOptions(int argc, char** argv) {
   bool found = false;
 
   this->watermark = 0.95f;
+  this->verbose = false;
 
-  while ((flag = getopt_long(argc, argv, "hw:", long_options, NULL)) != -1) {
+  while ((flag = getopt_long(argc, argv, "hvw:", long_options, NULL)) != -1) {
     switch (flag) {
       case 'h':
         print_usage(argv[0]);
         break;
       case 'w':
         this->watermark = strtof(optarg, NULL);
+        break;
+      case 'v':
+        this->verbose = true;
         break;
       default:
         print_usage(argv[0]);

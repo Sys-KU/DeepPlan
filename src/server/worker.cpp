@@ -33,8 +33,7 @@ void Worker::run() {
   std::shared_ptr<Action> action;
 
   double infer_time = 0;
-  double total_infer_time = 0;
-  int num_reqs = 0;
+  std::vector<double> infer_times;
   int num_colds = 0;
   double last_logging_time = 0.f;
 
@@ -70,18 +69,17 @@ void Worker::run() {
 
         infer_action->complete(infer_time);
 
-        total_infer_time += (infer_time / 1e6);
-        num_reqs++;
+        infer_times.push_back(infer_time / 1e6);
 
         auto now = util::now() / 1e6;
-        if ((now - last_logging_time) > 5000) {
+        if ((now - last_logging_time) > 5000 && options_.verbose) {
           std::cout << "[INFO] ";
-          std::cout << "infer time: " << total_infer_time / num_reqs << ", ";
+          std::cout << "infer time: " << util::get_mean_value(infer_times) << ", ";
           std::cout << "num cold starts: " << num_colds << "\n";
 
-          total_infer_time = 0;
+          infer_times.clear();
+          infer_times.resize(0);
           num_colds = 0;
-          num_reqs = 0;
 
           last_logging_time = now;
         }
