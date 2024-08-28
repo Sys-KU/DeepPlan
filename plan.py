@@ -218,15 +218,15 @@ def dump_profile_info(model, x, file_name):
     layer_cuda_host_exec_times = measure_exec_layers(model, x)
 
     # Measure GPU Direct Access Exec Time with benchmark
-    layer_profs = []
+    layer_profs: List[LayerProf] = []
     for i, layer in enumerate(_layers):
         size = 0
         for key, param in layer._parameters.items():
             if param is not None:
-                size += np.prod(np.array(param.size()), dtype=np.int64) * 4
+                size += np.prod(np.array(param.size()), dtype=np.int64) * param.element_size()
         for key, buf in layer._buffers.items():
             if buf is not None:
-                size += np.prod(np.array(buf.size()), dtype=np.int64) * 4
+                size += np.prod(np.array(buf.size()), dtype=np.int64) * param.element_size()
 
         layer_prof = LayerProf(index = i,
                                layer_type = layer.__class__.__name__,
@@ -449,6 +449,8 @@ def generate_model_config(
         dtype = input_data.dtype
         if dtype == torch.float32:
             model_input.data_type = DataType.TYPE_FP32
+        elif dtype == torch.float16:
+            model_input.data_type = DataType.TYPE_FP16
         elif dtype == torch.int64:
             model_input.data_type = DataType.TYPE_INT64
         model_input.shape[:] = input_data.size()[1:]
@@ -481,7 +483,7 @@ def generate_model_config(
         model_config.plans.append(plan)
 
     # Load the profiling data for the batch sizes
-    layer_profs_list = []
+    layer_profs_list: List[List[LayerProf]] = []
     for batch_size in range(1, max_batch_size + 1):
         profile_file = os.path.join(output_dir_path,
                                     f'model_batch_{batch_size}.pickle')
@@ -536,6 +538,14 @@ def generate_model_config(
                     for layer in layer_profs
             )
 
+            optimal_point = Prof.OptimalPoint()
+            optimal_idx, optimal_load_size = explore_optimal_point(layer_profs, exec_ms)
+            optimal_point.batch_size = batch_size
+            optimal_point.layer_idx = optimal_idx
+            optimal_point.load_size = optimal_load_size
+
+            prof.optimal_points.append(optimal_point)
+
             input_data = models.import_data(model_name, batch_size)
             input_data = input_data.cuda()
 
@@ -561,14 +571,6 @@ def generate_model_config(
 
             prof.exec_times.append(exec_time)
 
-            optimal_point = Prof.OptimalPoint()
-            optimal_idx, optimal_load_size = explore_optimal_point(layer_profs, exec_ms)
-            optimal_point.batch_size = batch_size
-            optimal_point.layer_idx = optimal_idx
-            optimal_point.load_size = optimal_load_size
-
-            prof.optimal_points.append(optimal_point)
-
         _, layers = layer_profs_list[0]
         layer_load_times = []
         layer_sizes = []
@@ -585,6 +587,20 @@ def generate_model_config(
     config_path = os.path.join(output_dir_path, 'config.pbtxt')
     util.write_to_pbtxt(model_config, config_path)
     logging.info(f"Model config is created at {config_path}")
+
+    optp = model_config.profs[0].optimal_points[0]
+    deepplan_optp = model_config.profs[1].optimal_points[0]
+
+    _, layers = layer_profs_list[0]
+    original_size = sum([l.size for l in layers])
+    deepplan_size = sum([l.size for l in layers if l.exec_type != ExecType.DHA])
+
+    print("==== Model size ====")
+    print(f"Original: {original_size/1024/1024:.2f} MB")
+    print(f"DeepPlan: {deepplan_size/1024/1024:.2f} MB")
+    print(f"DeepCache: {(original_size-optp.load_size)/1024/1024:.2f} MB")
+    print("DeepPlan + DeepCache: "
+          f"{(deepplan_size-deepplan_optp.load_size)/1024/1024:.2f} MB")
 
 
 def profile_model(model_name, max_batch_size, output_dir_path, do_profile):
