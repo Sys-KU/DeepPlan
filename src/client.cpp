@@ -55,7 +55,16 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   std::cout << "=======================================\n";
 
   if (!options.dump.empty()) {
-    workload->dump(options.dump);
+    std::ofstream ofs;
+
+    ofs.open(options.dump);
+    if (ofs.is_open()) {
+      std::cout << "Dump response results into '" << options.dump << "'\n";
+      ofs << "model id, execution time, inference latency\n";
+      workload->dump(std::move(ofs));
+    }
+    std::cout << "Success Dump\n";
+
   }
 }
 
@@ -141,6 +150,18 @@ void azure_experiment(ClientOptions options) {
     std::cout << result.goodput_rate << "\n";
   }
 
+  if (!options.dump.empty()) {
+    std::ofstream ofs;
+    ofs.open(options.dump);
+    if (ofs.is_open()) {
+      std::cout << "Dump response results into '" << options.dump << "'\n";
+      ofs << "model id, execution time, inference latency\n";
+      for (auto workload : workloads) {
+        workload->dump(std::move(ofs));
+      }
+    }
+    std::cout << "Success Dump\n";
+  }
 }
 
 

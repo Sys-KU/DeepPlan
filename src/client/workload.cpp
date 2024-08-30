@@ -1,6 +1,7 @@
 #include <client/workload.h>
 #include <client/genzipf.h>
 #include <time_util.h>
+#include <random>
 
 Workload::Workload(int concurrency, int rate, int n_requests,
                    std::string dist_type, bool disable_timeout,
@@ -108,7 +109,7 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
         uint64_t deadline = infer->deadline;
         uint64_t response_time = infer->response_time;
         uint64_t arrival_time = infer->arrival_time;
-        uint64_t latency = (response_time - arrival_time) / 1e6;
+        double latency = (response_time - arrival_time) / 1e6;
         bool good = (response_time <= deadline);
         this->res_results.emplace_back(model_id, latency, infer->infer_time, good);
         if (infer->is_cold) this->cold_start_cnt++;
@@ -155,18 +156,11 @@ WorkloadResult Workload::result() {
   return result;
 }
 
-void Workload::dump(std::string dump_file) {
-  std::ofstream ofs;
-
-  ofs.open(dump_file);
-  if (ofs.is_open()) {
-    std::cout << "Dump response results into '" << dump_file << "'\n";
-    for (auto& res_result : res_results) {
-      ofs << res_result.model_id << ", " << res_result.infer_time / 1e6 << "\n";
-    }
+void Workload::dump(std::ofstream ofs) {
+  for (auto& res_result : res_results) {
+    ofs << res_result.model_id << ", " << res_result.infer_time / 1e6 << ", "
+        << res_result.latency << "\n";
   }
-
-  std::cout << "Success Dump\n";
 }
 
 ModelLoader::ModelLoader(std::vector<std::string> model_names, int n_models,

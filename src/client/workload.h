@@ -2,8 +2,6 @@
 #include <client/client.h>
 #include <util.h>
 
-#include <random>
-
 struct WorkloadResult {
   double avg_infer_time;
   double throughput;
@@ -31,7 +29,7 @@ class Workload {
 
   WorkloadResult result();
 
-  void dump(std::string dump_file);
+  void dump(std::ofstream ofs);
 
   Client client;
 
