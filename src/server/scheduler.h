@@ -275,11 +275,11 @@ class Scheduler {
 
   void handle_timeouts();
 
-  void reclaim_gpu_memory(const size_t required_memory);
+  void reclaim_gpu_memory(const size_t size);
 
   deepplan::Model* find_model(int model_id);
 
-  ReclaimingOutput preempt_model();
+  ReclaimingOutput preempt_model(uint64_t mem_size);
 
   void clear_models();
 

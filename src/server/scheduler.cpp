@@ -295,15 +295,16 @@ void Scheduler::handle_timeouts() {
   }
 }
 
-void Scheduler::reclaim_gpu_memory(const size_t required_memory) {
-  uint64_t mem_size = mem.get_mem();
-  uint64_t reclaimed_size = 0;
+void Scheduler::reclaim_gpu_memory(const size_t size) {
+  int64_t free_size = capacity_ - mem.get_mem();
   std::vector<ReclaimingOutput> outputs;
-  while ((mem_size + required_memory - reclaimed_size)
-      >= capacity_) {
-    auto output = preempt_model();
+  int64_t required_mem  = static_cast<int64_t>(size);
 
-    reclaimed_size += output.size;
+  while (free_size < required_mem) {
+    uint64_t mem_size = required_mem - free_size;
+    auto output = preempt_model(mem_size);
+
+    free_size += output.size;
 
     outputs.push_back(std::move(output));
   }
@@ -315,8 +316,12 @@ void Scheduler::reclaim_gpu_memory(const size_t required_memory) {
       queue.push(
         std::make_shared<ReclaimCompletion>(action_id, end_time, end_size));
     };
+    uint64_t reclaim_size = 0;
+    for (auto output : outputs) {
+      reclaim_size += output.size;
+    }
 
-    mem.reclaim_mem(action_seed_id, -1, reclaimed_size);
+    mem.reclaim_mem(action_seed_id, -1, reclaim_size);
 
     ReclaimAction action(action_seed_id, outputs, r_cb);
     worker_->reclaim(action);
@@ -348,16 +353,18 @@ deepplan::Model* Scheduler::find_model(int model_id) {
         }
       }
     }
-    else if (r_policy_ == ReclaimPolicy::DYNAMIC && cfr->exist(model_id)) {
-      cfr->erase(model_id);
-      found = true;
+    else if (r_policy_ == ReclaimPolicy::DYNAMIC) {
+      auto second_models = partial_models_list.front();
+      if (second_models->exist(model_id)) {
+        second_models->erase(model_id);
+      }
     }
   }
 
   return model;
 }
 
-ReclaimingOutput Scheduler::preempt_model() {
+ReclaimingOutput Scheduler::preempt_model(uint64_t mem_size) {
   ReclaimingOutput output;
 
   switch (r_policy_) {
@@ -473,14 +480,13 @@ ReclaimingOutput Scheduler::preempt_model() {
 
     case ReclaimPolicy::DYNAMIC:
       {
-        bool found = false;
+        int evict_id;
+        auto second_models = partial_models_list.front();
 
         // Apply LRU policy for models that don't reach the sweet spot.
         if (running_models->size() > 0) {
-          int evict_id;
           auto evict_model = dynamic_cast<deepplan::Model*>(
               running_models->pop(&evict_id));
-          output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
 
           auto batch_window = window_bufs[evict_id].get_buf();
           assert(!batch_window.empty());
@@ -490,34 +496,27 @@ ReclaimingOutput Scheduler::preempt_model() {
 
           size_t optimal_size = evict_model->optimal_sizes[min_batch_size - 1];
 
-          if (evict_model->uncached_size >= optimal_size) {
-            // Delegate the model to CFR.
-            cfr->put(evict_id, req_scoreboard->get_score(evict_id));
-          }
-          else {
+          uint64_t cached_rm_size = optimal_size - evict_model->uncached_size;
+          output = model_pool->reclaim_model(
+              evict_id, std::min(mem_size, cached_rm_size));
+
+          if (evict_model->uncached_size < optimal_size) {
             running_models->put_back(evict_id, evict_model);
           }
-
-          found = true;
-        }
-
-        if (!found && cfr->size() > 0)  {
-          auto [vruntime, evict_model_id] = cfr->pop();
-
-          auto evict_model = dynamic_cast<deepplan::Model*>(
-              model_pool->get_model(evict_model_id));
-          output = model_pool->reclaim_model(evict_model_id, RECLAIM_MEMORY_STEP);
-
-          assert(evict_model->uncached_size <= evict_model->model_size);
-          if (evict_model->uncached_size < evict_model->model_size) {
-            cfr->put(evict_model_id, vruntime + req_scoreboard->get_score(evict_model_id));
+          else {
+            second_models->put(evict_id, evict_model);
           }
-
-          found = true;
         }
+        else if (second_models->size() > 0) {
+          auto evict_model = dynamic_cast<deepplan::Model*>(
+              second_models->pop(&evict_id));
 
-
-        if (!found) {
+          output = model_pool->reclaim_model(evict_id, mem_size);
+          if (evict_model->uncached_size < evict_model->model_size) {
+            second_models->put_back(evict_id, evict_model);
+          }
+        }
+        else {
           throw std::runtime_error("There is no model to evict");
         }
       }
