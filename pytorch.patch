@@ -1,3 +1,9 @@
+commit c0ac6c05e04e43e16c8a626a27d09b5b925cdb31
+Author: Jinwoo Jeong <jjw8967@ajou.ac.kr>
+Date:   Tue Jul 23 04:53:26 2024 +0000
+
+    Implement the functions of DeepPlan
+
 diff --git a/aten/src/ATen/cuda/CachingHostAllocator.cpp b/aten/src/ATen/cuda/CachingHostAllocator.cpp
 index a6646779cfb..ad48f1cfc38 100644
 --- a/aten/src/ATen/cuda/CachingHostAllocator.cpp
@@ -96,6 +102,167 @@ index 854f5d8dd12..ff337867647 100644
 +  return getCachingCUDAHostAllocator();
 +}
  } // namespace at::cuda
+diff --git a/aten/src/ATen/cuda/TensorSync.cpp b/aten/src/ATen/cuda/TensorSync.cpp
+new file mode 100644
+index 00000000000..93b985b0f31
+--- /dev/null
++++ b/aten/src/ATen/cuda/TensorSync.cpp
+@@ -0,0 +1,138 @@
++#include <ATen/core/Tensor.h>
++#include <ATen/cuda/TensorSync.h>
++#include <c10/cuda/CUDAStream.h>
++
++#include <cuda_runtime_api.h>
++#include <map>
++#include <mutex>
++#include <condition_variable>
++#include <iostream>
++
++namespace at {
++namespace cuda::EventManager {
++
++struct DeviceEventManager {
++ public:
++  DeviceEventManager(int device) : device(device) {};
++
++  void recordEvent(at::Tensor& src, const at::Tensor& dst, at::cuda::CUDAStream stream) {
++    {
++      std::lock_guard<std::mutex> lock(mutex);
++      void *src_ptr = src.data_ptr();
++      void *dst_ptr;
++
++      src.set_data(dst);
++
++      dst_ptr = src.data_ptr();
++
++      cudaEvent_t event = createCudaEvent();
++      C10_CUDA_CHECK(cudaEventRecord(event, stream));
++
++      // Deletes items that already exist.
++      auto it = recorded_event_map.find(src_ptr);
++      recorded_event_map[src_ptr] = {dst_ptr, event};
++
++      it = recorded_event_map.find(dst_ptr);
++      recorded_event_map[dst_ptr] = {src_ptr, event};
++
++    }
++    cv.notify_all();
++  }
++
++  void syncEvent(void* ptr, at::cuda::CUDAStream stream, bool same_device) {
++    cudaEvent_t event;
++    {
++      std::unique_lock<std::mutex> lock(mutex);
++      auto it = recorded_event_map.find(ptr);
++      if (it == recorded_event_map.end()) {
++        if (same_device) {
++          return;
++        }
++        cv.wait(lock, [&] {
++            auto _it = this->recorded_event_map.find(ptr);
++            return _it != this->recorded_event_map.end();
++            });
++        it = recorded_event_map.find(ptr);
++      }
++
++      event = it->second.second;
++      void* linked_ptr = it->second.first;
++      recorded_event_map.erase(it);
++      it = recorded_event_map.find(linked_ptr);
++      if (it != recorded_event_map.end()) {
++        recorded_event_map.erase(it);
++      }
++    }
++
++    //C10_CUDA_CHECK(cudaEventSynchronize(event));
++    //freeCudaEvent(event);
++    C10_CUDA_CHECK(cudaStreamWaitEvent(stream, event, 0));
++  }
++
++  cudaEvent_t createCudaEvent() {
++    cudaEvent_t event;
++    C10_CUDA_CHECK(cudaEventCreateWithFlags(&event, cudaEventDisableTiming));
++
++    return event;
++  }
++
++  void freeCudaEvent(cudaEvent_t event) {
++    C10_CUDA_CHECK(cudaEventDestroy(event));
++  }
++
++  std::mutex mutex;
++  std::condition_variable cv;
++  int device;
++  std::map<void*, std::pair<void*, cudaEvent_t>> recorded_event_map;
++};
++
++struct EventManager {
++ public:
++  void init(int device_count) {
++    int size = device_event_managers.size();
++    if (size < device_count) {
++      device_event_managers.resize(device_count);
++      for (int i = 0; i < device_count; i++) {
++        device_event_managers[i] = std::unique_ptr<DeviceEventManager>(
++            new DeviceEventManager(i));
++      }
++    }
++  }
++
++  void recordEvent(at::Tensor& src, const at::Tensor& dst, int device, at::cuda::CUDAStream stream) {
++    device_event_managers[device]->recordEvent(src, dst, stream);
++  }
++
++  void syncEvent(void* ptr, int device, int cur_device, at::cuda::CUDAStream stream) {
++    device_event_managers[device]->syncEvent(ptr, stream, device == cur_device);
++  }
++
++  std::vector<std::unique_ptr<DeviceEventManager>> device_event_managers;
++};
++
++static EventManager event_manager;
++
++void initEventManager(int device_count) {
++  event_manager.init(device_count);
++}
++
++}  // namespace at::cuda::EventManager
++
++namespace native {
++
++void _record_event_cuda(at::Tensor& self, const at::Tensor& tensor, c10::Device device) {
++  if (self.data_ptr() == tensor.data_ptr()) {
++    return;
++  }
++
++  c10::cuda::CUDAStream stream = c10::cuda::getCurrentCUDAStream();
++  cuda::EventManager::event_manager.recordEvent(self, tensor, device.index(), stream);
++}
++
++void _sync_event_cuda(at::Tensor& self, c10::Device device, c10::Device cur_device) {
++  c10::cuda::CUDAStream stream = c10::cuda::getCurrentCUDAStream();
++  cuda::EventManager::event_manager.syncEvent(self.data_ptr(), device.index(), cur_device.index(), stream);
++}
++
++}  // namespace at::native
++}  // namespace at
+diff --git a/aten/src/ATen/cuda/TensorSync.h b/aten/src/ATen/cuda/TensorSync.h
+new file mode 100644
+index 00000000000..f85b769d5a1
+--- /dev/null
++++ b/aten/src/ATen/cuda/TensorSync.h
+@@ -0,0 +1,11 @@
++#pragma oncea
++
++#include <c10/cuda/CUDAStream.h>
++#include <ATen/core/Tensor.h>
++
++namespace at::cuda::EventManager {
++
++TORCH_CUDA_CPP_API void
++initEventManager(int device_count);
++
++}  // namespace at::cuda
 diff --git a/aten/src/ATen/cuda/detail/CUDAHooks.cpp b/aten/src/ATen/cuda/detail/CUDAHooks.cpp
 index acb9b1931f0..ae279444390 100644
 --- a/aten/src/ATen/cuda/detail/CUDAHooks.cpp
@@ -145,6 +312,53 @@ index 2b66f089339..467dc4991cb 100644
 +
  }
  }
+diff --git a/aten/src/ATen/native/TensorSync.cpp b/aten/src/ATen/native/TensorSync.cpp
+new file mode 100644
+index 00000000000..e1cbe6c8923
+--- /dev/null
++++ b/aten/src/ATen/native/TensorSync.cpp
+@@ -0,0 +1,41 @@
++#include <ATen/core/Tensor.h>
++
++#ifndef AT_PER_OPERATOR_HEADERS
++#include <ATen/Functions.h>
++#include <ATen/NativeFunctions.h>
++#else
++#include <ATen/ops/_record_event.h>
++#include <ATen/ops/_sync_event.h>
++#include <ATen/ops/_record_event_native.h>
++#include <ATen/ops/_sync_event_native.h>
++#include <ATen/ops/is_pinned_native.h>
++#endif
++
++namespace at::native {
++
++void record_tensor(Tensor& self, const Tensor& tensor, Device device) {
++  if (self.is_cuda() && self.is_pinned())
++    return;
++
++  at::_record_event(self, tensor, device);
++}
++
++Tensor& sync_device_(Tensor& self, Device device) {
++  if (self.is_cuda() && self.is_pinned())
++    return self;
++
++  at::_sync_event(self, device, self.device());
++  return self;
++}
++
++Tensor& sync_tensor_(Tensor& self, const Tensor& tensor) {
++  if (self.is_cuda() && self.is_pinned())
++    return self;
++  if (!tensor.is_cuda())
++    return self;
++
++  at::_sync_event(self, tensor.device(), self.device());
++  return self;
++}
++
++}  // namespace at::native
 diff --git a/aten/src/ATen/native/cuda/Copy.cu b/aten/src/ATen/native/cuda/Copy.cu
 index 3525d85f513..d4b616bfd27 100644
 --- a/aten/src/ATen/native/cuda/Copy.cu
