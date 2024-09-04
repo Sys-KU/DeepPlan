@@ -156,7 +156,7 @@ WorkloadResult Workload::result() {
   return result;
 }
 
-void Workload::dump(std::ofstream ofs) {
+void Workload::dump(std::ofstream& ofs) {
   for (auto& res_result : res_results) {
     ofs << res_result.model_id << ", " << res_result.infer_time / 1e6 << ", "
         << res_result.latency << "\n";

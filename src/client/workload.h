@@ -29,7 +29,7 @@ class Workload {
 
   WorkloadResult result();
 
-  void dump(std::ofstream ofs);
+  void dump(std::ofstream& ofs);
 
   Client client;
 

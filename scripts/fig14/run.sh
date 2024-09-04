@@ -42,10 +42,12 @@ for engine in "${engines[@]}"; do
         _engine=$engine
 
         tmp_file="/tmp/deepplan_${engine}_${r_policy}_fig14"
+        tmp_dump_file="/tmp/dump_${engine}_${r_policy}"
         printf "" > $tmp_file
 
         echo "Start Experiment ($engine)"
-        client_cmd="$build_path/client -m $model_list -e $_engine -r $rate -c $conc -w azure --disable_prefetch --disable_timeout --r_policy $r_policy"
+        client_cmd="$build_path/client -m $model_list -e $_engine -r $rate -c $conc -w azure --disable_prefetch --disable_timeout --r_policy $r_policy --dump $tmp_dump_file"
+        echo "$client_cmd"
         stdbuf --output=L $client_cmd | tee -a $tmp_file
 
         server_pid=$(ps -ef | grep -v grep | grep "$server_cmd" | awk '{print $2}')
@@ -83,12 +85,15 @@ log_path=$_log_path
 mkdir -p "$log_path"
 
 for engine in "${engines[@]}"; do
-    for r_policy in "${r_polices[@]}"; do
+    for r_policy in "${r_policies[@]}"; do
         tmp_file="/tmp/deepplan_${engine}_${r_policy}_fig14"
+        tmp_dump_file="/tmp/dump_${engine}_${r_policy}"
 
         output_file="$log_path/${engine}_${r_policy}.csv"
+        dump_file="$log_path/${engine}_${r_policy}.csv"
 
         awk '$1 ~ /^[0-9]*,/ { print $3 $4 $5 }' $tmp_file > $output_file
+        cp $tmp_dump_file $dump_file
 
         echo "Created '$output_file' log file"
     done
