@@ -461,15 +461,26 @@ def generate_model_config(
         optimal_idx = 0
         optimal_load_size = 0
 
-        for i in range(len(layers)):
-            load_time = sum(
-                [l.load_time for l in layers[i:] if l.exec_type != ExecType.DHA]
-            )
-            if exec_time > load_time:
-               break
+        for i in reversed(range(len(layers))):
+            load_time = 0
+            is_optimal = True
+            for j in range(i, len(layers)):
+                if layers[j].exec_type == ExecType.DHA: continue
+                load_time += layers[j].load_time
+                exec_time = sum(
+                    layer.cuda_exec_time
+                    if layer.exec_type == ExecType.LTE
+                    else layer.cuda_host_exec_time
+                    for layer in layers[:j]
+                )
+                if load_time > exec_time:
+                    is_optimal = False
+                    break
 
-            optimal_idx = i
-
+            if is_optimal:
+                optimal_idx = i
+            else:
+                break
 
         optimal_load_size = sum(
             [l.size for l in layers[optimal_idx:] if l.exec_type != ExecType.DHA]
@@ -566,7 +577,7 @@ def generate_model_config(
                 if step >= num_warmup:
                     exec_times.append(event1.elapsed_time(event2))
 
-            exec_ms = max(exec_times)
+            exec_ms = np.mean(exec_times)
             exec_time.exec_ns = exec_ms * 1e6
 
             prof.exec_times.append(exec_time)
