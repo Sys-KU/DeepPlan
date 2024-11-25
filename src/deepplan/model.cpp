@@ -92,11 +92,11 @@ Model::Model(const std::string name, const std::string model_path, const EngineT
 
 void Model::init() {
   Prof::EngineType proto_type;
-  if (engine_type == EngineType::PIPESWITCH) {
-    proto_type = Prof::PIPESWITCH;
-  }
-  else if (engine_type == EngineType::DEEPPLAN) {
+  if (engine_type == EngineType::DEEPPLAN) {
     proto_type = Prof::DEEPPLAN;
+  }
+  else {
+    proto_type = Prof::PIPESWITCH;
   }
 
   for (auto prof_ : this->model_config.profs()) {

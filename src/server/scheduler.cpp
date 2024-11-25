@@ -340,8 +340,7 @@ deepplan::Model* Scheduler::find_model(int model_id) {
     bool found = false;
     model = model_pool->get_model(model_id);
 
-    if (r_policy_ == ReclaimPolicy::BALANCE ||
-        r_policy_ == ReclaimPolicy::HYBRID) {
+    if (r_policy_ == ReclaimPolicy::BALANCE) {
       // Balance or Hybrid reclaim policy should check if this model is in
       // partial models list. If the model is found, it should be cleared from that list
       auto iter = partial_models_list.begin();
@@ -353,7 +352,8 @@ deepplan::Model* Scheduler::find_model(int model_id) {
         }
       }
     }
-    else if (r_policy_ == ReclaimPolicy::DYNAMIC) {
+    else if (r_policy_ == ReclaimPolicy::DYNAMIC ||
+             r_policy_ == ReclaimPolicy::HYBRID) {
       auto second_models = partial_models_list.front();
       if (second_models->exist(model_id)) {
         second_models->erase(model_id);
@@ -427,15 +427,14 @@ ReclaimingOutput Scheduler::preempt_model(uint64_t mem_size) {
       break;
     case ReclaimPolicy::HYBRID:
       {
-        auto partial_models = partial_models_list.front();
-        bool found = false;
+        int evict_id;
+        auto second_models = partial_models_list.front();
 
         // Apply LRU policy for models that don't reach the sweet spot.
         if (running_models->size() > 0) {
           int evict_id;
           auto evict_model = dynamic_cast<deepplan::Model*>(
               running_models->pop(&evict_id));
-          output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
 
           auto batch_window = window_bufs[evict_id].get_buf();
           assert(!batch_window.empty());
@@ -445,34 +444,25 @@ ReclaimingOutput Scheduler::preempt_model(uint64_t mem_size) {
 
           size_t optimal_size = evict_model->optimal_sizes[min_batch_size - 1];
 
-          if (evict_model->uncached_size >= optimal_size) {
-            // Delegate the model to RR.
-            partial_models->put(evict_id, evict_model);
-          }
-          else {
+          uint64_t cached_rm_size = optimal_size - evict_model->uncached_size;
+          output = model_pool->reclaim_model(
+              evict_id, std::min(mem_size, cached_rm_size));
+
+          if (evict_model->uncached_size < optimal_size) {
             running_models->put_back(evict_id, evict_model);
           }
-
-          found = true;
-        }
-
-        if (!found && partial_models->size() > 0) {
-          int evict_id;
-          auto evict_model = dynamic_cast<deepplan::Model*>(
-              partial_models->pop(&evict_id));
-
-          output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
-
-          if (evict_model->model_size > evict_model->uncached_size) {
-            partial_models->put(evict_id, evict_model);
-          }
           else {
-            evict_model->clear();
+            second_models->put(evict_id, evict_model);
           }
-          found = true;
-        }
 
-        if (!found) {
+        }
+        else if (second_models->size() > 0) {
+          auto evict_model = dynamic_cast<deepplan::Model*>(
+              second_models->pop(&evict_id));
+
+          output = model_pool->reclaim_model(evict_id);
+        }
+        else {
           throw std::runtime_error("There is no model to evict");
         }
       }
@@ -511,10 +501,16 @@ ReclaimingOutput Scheduler::preempt_model(uint64_t mem_size) {
           auto evict_model = dynamic_cast<deepplan::Model*>(
               second_models->pop(&evict_id));
 
-          output = model_pool->reclaim_model(evict_id, mem_size);
-          if (evict_model->uncached_size < evict_model->model_size) {
+          output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
+
+          auto uncached_size = evict_model->uncached_size;
+          if ((evict_model->model_size - uncached_size) > 0) {
             second_models->put_back(evict_id, evict_model);
           }
+//          output = model_pool->reclaim_model(evict_id, mem_size);
+//          if (evict_model->uncached_size < evict_model->model_size) {
+//            second_models->put_back(evict_id, evict_model);
+//          }
         }
         else {
           throw std::runtime_error("There is no model to evict");

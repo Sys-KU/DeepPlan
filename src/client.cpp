@@ -139,7 +139,7 @@ void azure_experiment(ClientOptions options) {
 
   std::cout << "Azure Experiment\n";
   std::cout << "Minutes, Offered Load, 99% Latecny(ms), Cold Start Rate(%), Goodput Rate(%)\n";
-  for (int p = 0; p < period; p++) {
+  for (int p = 0; p < workloads.size(); p++) {
     workloads[p]->run(model_loader->inputs);
     auto result = workloads[p]->result();
 
