@@ -504,8 +504,8 @@ ReclaimingOutput Scheduler::preempt_model(uint64_t mem_size) {
           output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
 
           auto uncached_size = evict_model->uncached_size;
-          if ((evict_model->model_size - uncached_size) > 0) {
-            second_models->put_back(evict_id, evict_model);
+          if (uncached_size < evict_model->model_size) {
+            second_models->put(evict_id, evict_model);
           }
 //          output = model_pool->reclaim_model(evict_id, mem_size);
 //          if (evict_model->uncached_size < evict_model->model_size) {
