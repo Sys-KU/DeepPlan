@@ -23,15 +23,15 @@ model_list="bert_base bert_base bert_base bert_base \
             resnet101 resnet101 resnet101 resnet101 \
             bert_large bert_large bert_large bert_large \
             roberta_large roberta_large roberta_large roberta_large"
-conc=200
-rate=240
+conc=120
+rate=140
 
 engines=("deepplan" "pipeline")
 r_policies=("dynamic" "lru")
 
 for engine in "${engines[@]}"; do
     for r_policy in "${r_policies[@]}"; do
-        server_cmd="$build_path/server -w 0.3"
+        server_cmd="$build_path/server -w 0.8"
 
         echo "Run Server"
         $server_cmd & 1> /dev/null
@@ -90,7 +90,7 @@ for engine in "${engines[@]}"; do
         tmp_dump_file="/tmp/dump_${engine}_${r_policy}"
 
         output_file="$log_path/${engine}_${r_policy}.csv"
-        dump_file="$log_path/${engine}_${r_policy}.csv"
+        dump_file="$log_path/dump_${engine}_${r_policy}.csv"
 
         awk '$1 ~ /^[0-9]*,/ { print $3 $4 $5 }' $tmp_file > $output_file
         cp $tmp_dump_file $dump_file

@@ -36,9 +36,9 @@ def get_data(target):
 
         else:
             for i, line in enumerate(rdr):
-                latency = np.append(latency, float(line[0]))
-                cold = np.append(cold, float(line[1]))
-                goodput = np.append(goodput, float(line[2]))
+                latency = np.append(latency, float(line[2]))
+                cold = np.append(cold, float(line[3]))
+                goodput = np.append(goodput, float(line[4]))
 
             result.append(latency)
             result.append(goodput)
@@ -61,7 +61,7 @@ engine_list = ["pipeline_lru.csv", "deepplan_lru.csv", "pipeline_dynamic.csv", "
 color_list = ['#AEB6BF', '#5D6D7E', '#34495E', '#273746', '#273746']
 line_list = [':', '-.', '--', '-']
 
-ylim_list = [(10500, 17000), (0, 400), (75, 103), (0, 20)]
+ylim_list = [(6000, 9500), (0, 950), (50, 103), (0, 20)]
 
 x_label = "Time (minutes)"
 y_label = ["Offered load\n (req./min.)", "99 % latency\n (ms)", "Goodput\n (%)", "Cold-start\n (%)"]
@@ -111,7 +111,8 @@ for i, engine in enumerate(engine_list):
         if j > 0:
             ax.plot(x_value, result[j-1], linewidth = LINE_WIDTH, color=color_list[i], linestyle=line_list[i], markersize=MARKER_SIZE)
 
-            ax.set_ylim(ylim_list[j])
+            if ylim_list[i]:
+                ax.set_ylim(ylim_list[j])
             ax.tick_params(axis='both', labelsize=FONTSIZE_TICK)
 
             ax.set_xticks(x_ticks)
