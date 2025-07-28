@@ -7,9 +7,10 @@ struct WorkloadResult {
   double throughput;
   double latency_50;
   double latency_99;
-  double cold_rate;
   double goodput_rs;
   double goodput_rate;
+  double cold_rate;
+  double optimal_cold_rate;
 };
 
 class Workload {
@@ -57,7 +58,7 @@ class Workload {
     const bool good;
   };
   std::vector<ResResult> res_results;
-  int cold_start_cnt = 0;
+  std::vector<int> cold_starts;
   int timeout_cnt = 0;
 };
 

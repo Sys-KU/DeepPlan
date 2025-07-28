@@ -112,7 +112,7 @@ void Workload::run(std::vector<std::vector<char>>& inputs) {
         double latency = (response_time - arrival_time) / 1e6;
         bool good = (response_time <= deadline);
         this->res_results.emplace_back(model_id, latency, infer->infer_time, good);
-        if (infer->is_cold) this->cold_start_cnt++;
+        this->cold_starts.push_back(infer->cold_type);
       }
       else if (auto timeout = dynamic_cast<serverapi::TimeoutResponse*>(rsp)) {
         this->timeout_cnt++;
@@ -149,9 +149,24 @@ WorkloadResult Workload::result() {
   result.avg_infer_time = infer_time / 1e6 / (n_requests); // ns -> ms
   result.latency_50 = latencies[index_50];
   result.latency_99 = latencies[index_99];
-  result.cold_rate = (double)cold_start_cnt / n_requests * 100;
   result.goodput_rs = (double)goodput_cnt / (elapsed_time / 1e3);  // r/s
   result.goodput_rate = (double)goodput_cnt / n_requests * 100;
+  int cold_cnt = 0;
+  int optimal_cold_cnt = 0;
+  for (auto cold : cold_starts) {
+    switch (cold) {
+      case 1:
+        optimal_cold_cnt++;
+      case 2:
+        cold_cnt++;
+      default:
+        break;
+    }
+  }
+
+  result.cold_rate = (double)cold_cnt / n_requests * 100;
+  result.optimal_cold_rate = (double)optimal_cold_cnt / n_requests * 100;
+
 
   return result;
 }

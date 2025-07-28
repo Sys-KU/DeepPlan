@@ -27,7 +27,7 @@ struct InferenceRequest : public Request {
 
 struct InferenceResponse : public Response {
  public:
-  bool is_cold;
+  int cold_type;
   double infer_time;
   uint64_t arrival_time;
   uint64_t response_time;

@@ -126,7 +126,19 @@ void Scheduler::handle_load(const uint64_t now) {
     mem.load_mem(action_seed_id, model_id, estimated_load_time, loaded_size);
     LoadAction action(action_seed_id, model_id, load_layers, l_cb);
     worker_->load(action);
-    cold_model_ids.insert(model_id);
+
+    // cold_type {
+    // 0: Not cold
+    // 1: Optimal cold
+    // 2: Cold
+    int cold_type;
+    if (loaded_size < (model->optimal_sizes[0] + RECLAIM_MEMORY_STEP)) {
+      cold_type = 1;
+    }
+    else {
+      cold_type = 2;
+    }
+    cold_model_ids.insert({model_id, cold_type});
 
     action_seed_id++;
   }
@@ -256,12 +268,12 @@ void Scheduler::handle_exec(const uint64_t now) {
       queue.push(std::make_shared<InferCompletion>(action_id, end_time, model_id));
     };
 
-    bool is_cold = false;
+    int cold_type = 0;
     if (auto search = cold_model_ids.find(model_id); search != cold_model_ids.end()) {
         cold_model_ids.erase(search);
-        is_cold = true;
+        cold_type = search->second;
     }
-    InferAction action(action_seed_id, model_id, is_cold, tasks, i_cb);
+    InferAction action(action_seed_id, model_id, cold_type, tasks, i_cb);
 
     exec.add_work(action_seed_id, estimated_time);
 

@@ -26,7 +26,7 @@ void msg_inference_req_rx::get(serverapi::InferenceRequest& request) {
 void msg_inference_rsp_tx::set(serverapi::InferenceResponse& response) {
   set_req_id(response.req_id);
   msg.set_req_id(response.req_id);
-  msg.set_is_cold(response.is_cold);
+  msg.set_cold_type(response.cold_type);
   msg.set_infer_time(response.infer_time);
   msg.set_arrival_time(response.arrival_time);
   msg.set_response_time(response.response_time);
@@ -35,7 +35,7 @@ void msg_inference_rsp_tx::set(serverapi::InferenceResponse& response) {
 
 void msg_inference_rsp_rx::get(serverapi::InferenceResponse& response) {
   response.req_id = get_rx_req_id();
-  response.is_cold = msg.is_cold();
+  response.cold_type = msg.cold_type();
   response.infer_time = msg.infer_time();
   response.arrival_time = msg.arrival_time();
   response.response_time = msg.response_time();

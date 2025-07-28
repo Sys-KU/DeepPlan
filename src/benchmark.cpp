@@ -59,7 +59,6 @@ void benchmark(BenchmarkOptions options) {
 
     auto outputs = model->forward(inputs);
 
-    torch::cuda::synchronize(target_device.index());
     t2 = util::now();
 
     if (options.engine_type != IN_MEMORY) {

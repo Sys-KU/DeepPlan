@@ -49,10 +49,10 @@ struct InferAction : public Action {
   InferAction(
     int action_id,
     int model_id,
-    bool is_cold,
+    int cold_type,
     std::vector<InferTask> tasks,
     std::function<void(int, uint64_t, int)> cb)
-    : Action(action_id), model_id(model_id), is_cold(is_cold), tasks(tasks),
+    : Action(action_id), model_id(model_id), cold_type(cold_type), tasks(tasks),
       cb(cb) {};
 
   void complete(const uint64_t exec_time) {
@@ -60,7 +60,7 @@ struct InferAction : public Action {
     for (const auto& task : tasks) {
       auto response = new serverapi::InferenceResponse();
       response->req_id = task.request->req_id;
-      response->is_cold = is_cold;
+      response->cold_type = cold_type;
       response->infer_time = exec_time;
       response->arrival_time = task.request->arrival_time;
       response->deadline = task.request->deadline;
@@ -71,7 +71,7 @@ struct InferAction : public Action {
   }
 
   int model_id;
-  bool is_cold;
+  int cold_type;
   std::vector<InferTask> tasks;
   std::function<void(int, uint64_t, int)> cb;
 };

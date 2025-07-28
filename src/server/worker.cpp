@@ -58,7 +58,7 @@ void Worker::run() {
           inputs.push_back(torch::cat(input_tensors));
         }
 
-        num_colds += infer_action->is_cold;
+        num_colds += ((infer_action->cold_type) > 0);
 
         t1 = util::now();
         model_instance->forward(inputs, {});

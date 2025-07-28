@@ -50,6 +50,7 @@ void simple_experiment(ClientOptions options, std::string dist_type) {
   std::cout << "50% Latency: " << result.latency_50 << " ms\n";
   std::cout << "99% Latency: " << result.latency_99 << " ms\n";
   std::cout << "Cold Start Rate: " << result.cold_rate << " %\n";
+  std::cout << "Optimal Cold Start Rate: " << result.optimal_cold_rate << " %\n";
   std::cout << "Goodput: " << result.goodput_rs << " r/s\n";
   std::cout << "Goodput Rate: " << result.goodput_rate << " %\n";
   std::cout << "=======================================\n";
