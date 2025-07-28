@@ -352,20 +352,8 @@ deepplan::Model* Scheduler::find_model(int model_id) {
     bool found = false;
     model = model_pool->get_model(model_id);
 
-    if (r_policy_ == ReclaimPolicy::BALANCE) {
-      // Balance or Hybrid reclaim policy should check if this model is in
-      // partial models list. If the model is found, it should be cleared from that list
-      auto iter = partial_models_list.begin();
-      for (iter; iter != partial_models_list.end(); iter++) {
-        if ((*iter)->exist(model_id)) {
-          (*iter)->erase(model_id);
-          found = true;
-          break;
-        }
-      }
-    }
-    else if (r_policy_ == ReclaimPolicy::DYNAMIC ||
-             r_policy_ == ReclaimPolicy::HYBRID) {
+    if (r_policy_ == ReclaimPolicy::DYNAMIC ||
+        r_policy_ == ReclaimPolicy::HYBRID) {
       auto second_models = partial_models_list.front();
       if (second_models->exist(model_id)) {
         second_models->erase(model_id);
@@ -401,37 +389,20 @@ ReclaimingOutput Scheduler::preempt_model(uint64_t mem_size) {
       break;
     case ReclaimPolicy::BALANCE:
       {
-        auto models_list = partial_models_list;
-        models_list.push_front(running_models);
+        int evict_id;
 
-        bool found = false;
+        if (running_models->size() > 0) {
+          auto evict_model = dynamic_cast<deepplan::Model*>(
+              running_models->pop(&evict_id));
 
-        for (auto iter = models_list.begin(); iter != models_list.end(); iter++) {
-          if ((*iter)->size() > 0) {
-            int evict_id;
-            auto evict_model = dynamic_cast<deepplan::Model*>((*iter)->pop(&evict_id));
-            output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
-            found = true;
+          output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
 
-            iter++;
-            if (iter != models_list.end()) {
-              (*iter)->put(evict_id, evict_model);
-            }
-            else {
-              // If the caching memory of the evict_model leaves on GPU,
-              // we expand partial_models_list
-              if (evict_model->uncached_size < evict_model->model_size) {
-                auto partial_models = new util::LRUCache<int, deepplan::Model*>();
-                partial_models->put(evict_id, evict_model);
-                partial_models_list.push_back(std::move(partial_models));
-              }
-            }
-
-            break;
+          auto uncached_size = evict_model->uncached_size;
+          if (uncached_size < evict_model->model_size) {
+            running_models->put(evict_id, evict_model);
           }
         }
-
-        if (!found) {
+        else {
           throw std::runtime_error("There is no model to evict");
         }
       }
@@ -513,6 +484,8 @@ ReclaimingOutput Scheduler::preempt_model(uint64_t mem_size) {
           auto evict_model = dynamic_cast<deepplan::Model*>(
               second_models->pop(&evict_id));
 
+          // std::cout << "Evict " << evict_id << ": "
+          //          << (evict_model->model_size - evict_model->uncached_size) /1024/1024 << "\n";
           output = model_pool->reclaim_model(evict_id, RECLAIM_MEMORY_STEP);
 
           auto uncached_size = evict_model->uncached_size;
