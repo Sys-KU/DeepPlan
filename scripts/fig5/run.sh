@@ -9,13 +9,15 @@ fi
 
 export PLAN_REPO=${PLAN_REPO}
 
+ENGINE="pipeline"
+
 script_path=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 build_path="$script_path/../../build"
 
 TARGET="cache_study"
 
-models=("resnet50" "resnet101" "bert_base" "bert_large")
-batch_sizes=(1 2 4 8 16)
+models=("resnet50" "bert_base" "roberta_large")
+batch_sizes=(1)
 
 
 
@@ -25,7 +27,7 @@ for model in "${models[@]}"; do
 
 	for batch_size in "${batch_sizes[@]}"; do
 		# Baseline
-		cmd="$build_path/$TARGET -m $model -b $batch_size"
+		cmd="$build_path/$TARGET -m $model -b $batch_size -e $ENGINE -v"
 		echo "Run $cmd"
 
 		output=`$cmd`

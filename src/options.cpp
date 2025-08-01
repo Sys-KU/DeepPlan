@@ -354,7 +354,7 @@ void CacheStudyOptions::parseOptions(int argc, char** argv) {
   this->engine_type = EngineType::PIPESWITCH;
   this->verbose     = false;
 
-  while ((flag = getopt_long(argc, argv, "b:hm:v:e:", long_options, NULL)) != -1) { 
+  while ((flag = getopt_long(argc, argv, "b:hm:ve:", long_options, NULL)) != -1) {
     switch (flag) {
       case 'h':
         print_usage(argv[0]);
