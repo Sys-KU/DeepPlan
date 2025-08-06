@@ -35,7 +35,7 @@ $ sudo apt install build-essential
 
 * C++ Library on Ubuntu
 ```
-$ sudo apt-get install libtbb-dev libboost-all-dev
+$ sudo apt-get install libtbb-dev libboost-all-dev libnuma-dev
 ```
 
 * CUDA Toolkit v12.1 & CuDNN v8.9.7
